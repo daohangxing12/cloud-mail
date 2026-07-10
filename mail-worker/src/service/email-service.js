@@ -27,13 +27,17 @@ const emailService = {
 
 	async list(c, params, userId) {
 
-		let { emailId, type, accountId, size, timeSort, allReceive } = params;
+		let { emailId, type, accountId, size, timeSort, allReceive, domain, spam, keyword } = params;
 
 		size = Number(size);
 		emailId = Number(emailId);
 		timeSort = Number(timeSort);
 		accountId = Number(accountId);
-		allReceive = Number(allReceive);
+		type = Number(type);
+		domain = this.normalizeDomain(domain);
+		keyword = String(keyword || '').trim();
+		spam = Number(spam) === emailConst.spam.SPAM ? emailConst.spam.SPAM : emailConst.spam.NORMAL;
+		allReceive = await this.resolveAllReceive(c, userId, accountId, allReceive);
 
 		if (size > 50) {
 			size = 50;
@@ -49,9 +53,52 @@ const emailService = {
 
 		}
 
-		if (isNaN(allReceive)) {
-			let accountRow = await accountService.selectById(c, accountId);
-			allReceive = accountRow.allReceive;
+		const conditions = [
+			allReceive ? eq(1,1) : eq(email.accountId, accountId),
+			eq(email.userId, userId),
+			timeSort ? gt(email.emailId, emailId) : lt(email.emailId, emailId),
+			eq(email.type, type),
+			eq(email.isDel, isDel.NORMAL),
+			eq(email.isSpam, spam),
+			eq(account.isDel, isDel.NORMAL)
+		];
+
+		if (domain) {
+			conditions.push(this.domainFilter(type === emailConst.type.SEND ? email.sendEmail : email.toEmail, domain));
+		}
+		if (keyword) {
+			conditions.push(this.keywordFilter(keyword));
+		}
+
+		const countConditions = [
+			allReceive ? eq(1,1) : eq(email.accountId, accountId),
+			eq(email.userId, userId),
+			eq(email.type, type),
+			eq(email.isDel, isDel.NORMAL),
+			eq(email.isSpam, spam),
+			eq(account.isDel, isDel.NORMAL)
+		];
+
+		if (domain) {
+			countConditions.push(this.domainFilter(type === emailConst.type.SEND ? email.sendEmail : email.toEmail, domain));
+		}
+		if (keyword) {
+			countConditions.push(this.keywordFilter(keyword));
+		}
+
+		const latestConditions = [
+			allReceive ? eq(1,1) : eq(email.accountId, accountId),
+			eq(email.userId, userId),
+			eq(email.type, type),
+			eq(email.isDel, isDel.NORMAL),
+			eq(email.isSpam, spam)
+		];
+
+		if (domain) {
+			latestConditions.push(this.domainFilter(type === emailConst.type.SEND ? email.sendEmail : email.toEmail, domain));
+		}
+		if (keyword) {
+			latestConditions.push(this.keywordFilter(keyword));
 		}
 
 		const query = orm(c)
@@ -70,16 +117,7 @@ const emailService = {
 				account,
 				eq(account.accountId, email.accountId)
 			)
-			.where(
-				and(
-					allReceive ? eq(1,1) : eq(email.accountId, accountId),
-					eq(email.userId, userId),
-					timeSort ? gt(email.emailId, emailId) : lt(email.emailId, emailId),
-					eq(email.type, type),
-					eq(email.isDel, isDel.NORMAL),
-					eq(account.isDel, isDel.NORMAL)
-				)
-			);
+			.where(and(...conditions));
 
 		if (timeSort) {
 			query.orderBy(asc(email.emailId));
@@ -94,23 +132,11 @@ const emailService = {
 				account,
 				eq(account.accountId, email.accountId)
 			)
-			.where(
-				and(
-					allReceive ? eq(1,1) : eq(email.accountId, accountId),
-					eq(email.userId, userId),
-					eq(email.type, type),
-					eq(email.isDel, isDel.NORMAL),
-					eq(account.isDel, isDel.NORMAL)
-				)
-		).get();
+			.where(and(...countConditions))
+			.get();
 
 		const latestEmailQuery = orm(c).select().from(email).where(
-			and(
-				allReceive ? eq(1,1) : eq(email.accountId, accountId),
-				eq(email.userId, userId),
-				eq(email.type, type),
-				eq(email.isDel, isDel.NORMAL)
-			))
+			and(...latestConditions))
 			.orderBy(desc(email.emailId)).limit(1).get();
 
 		let [list, totalRow, latestEmail] = await Promise.all([listQuery, totalQuery, latestEmailQuery]);
@@ -134,6 +160,26 @@ const emailService = {
 		return { list, total: totalRow.total, latestEmail };
 	},
 
+	async resolveAllReceive(c, userId, accountId, allReceive) {
+		allReceive = Number(allReceive);
+		const accountRow = await accountService.selectById(c, accountId);
+
+		if (!accountRow || accountRow.userId !== userId) {
+			throw new BizError('account not found');
+		}
+
+		const userRow = await userService.selectByIdIncludeDel(c, userId);
+		if (userRow?.email === c.env.admin && accountRow.email === c.env.admin) {
+			return 1;
+		}
+
+		if (Number.isNaN(allReceive)) {
+			return accountRow.allReceive;
+		}
+
+		return allReceive;
+	},
+
 	async delete(c, params, userId) {
 		const { emailIds } = params;
 		const emailIdList = emailIds.split(',').map(Number);
@@ -142,6 +188,56 @@ const emailService = {
 				eq(email.userId, userId),
 				inArray(email.emailId, emailIdList)))
 			.run();
+	},
+
+	async blockSender(c, params, userId) {
+		const emailId = Number(params.emailId);
+		if (!emailId) {
+			throw new BizError('email not found');
+		}
+
+		const emailRow = await orm(c).select().from(email).where(
+			and(
+				eq(email.emailId, emailId),
+				eq(email.userId, userId),
+				eq(email.isDel, isDel.NORMAL)
+			)
+		).get();
+
+		if (!emailRow?.sendEmail) {
+			throw new BizError('sender not found');
+		}
+
+		const sender = String(emailRow.sendEmail).trim().toLowerCase();
+		const settingData = await settingService.query(c);
+		const blackFrom = String(settingData.blackFrom || '')
+			.split(',')
+			.map(item => item.trim().toLowerCase())
+			.filter(Boolean);
+
+		if (!blackFrom.includes(sender)) {
+			blackFrom.push(sender);
+			await settingService.setBlacklist(c, {
+				blackFrom: blackFrom.join(','),
+				blackSubject: settingData.blackSubject || '',
+				blackContent: settingData.blackContent || ''
+			});
+		}
+
+		await orm(c).update(email).set({
+			isSpam: emailConst.spam.SPAM
+		}).where(
+			and(
+				eq(email.userId, userId),
+				eq(email.type, emailConst.type.RECEIVE),
+				eq(email.isDel, isDel.NORMAL),
+				sql`LOWER(${email.sendEmail}) = LOWER(${sender})`
+			)
+		).run();
+
+		return {
+			sender
+		};
 	},
 
 	receive(c, params, cidAttList, r2domain) {
@@ -701,12 +797,25 @@ const emailService = {
 	},
 
 	async latest(c, params, userId) {
-		let { emailId, accountId, allReceive } = params;
-		allReceive = Number(allReceive);
+		let { emailId, accountId, allReceive, domain, spam } = params;
+		emailId = Number(emailId);
+		accountId = Number(accountId);
+		domain = this.normalizeDomain(domain);
+		spam = Number(spam) === emailConst.spam.SPAM ? emailConst.spam.SPAM : emailConst.spam.NORMAL;
+		allReceive = await this.resolveAllReceive(c, userId, accountId, allReceive);
 
-		if (isNaN(allReceive)) {
-			let accountRow = await accountService.selectById(c, accountId);
-			allReceive = accountRow.allReceive;
+		const conditions = [
+			gt(email.emailId, emailId),
+			eq(email.userId, userId),
+			eq(email.isDel, isDel.NORMAL),
+			eq(email.isSpam, spam),
+			eq(account.isDel, isDel.NORMAL),
+			allReceive ? eq(1,1) : eq(email.accountId, accountId),
+			eq(email.type, emailConst.type.RECEIVE)
+		];
+
+		if (domain) {
+			conditions.push(this.domainFilter(email.toEmail, domain));
 		}
 
 		let list = await orm(c).select({...email}).from(email)
@@ -714,21 +823,84 @@ const emailService = {
 				account,
 				eq(account.accountId, email.accountId)
 			)
-			.where(
-				and(
-					gt(email.emailId, emailId),
-					eq(email.userId, userId),
-					eq(email.isDel, isDel.NORMAL),
-					eq(account.isDel, isDel.NORMAL),
-					allReceive ? eq(1,1) : eq(email.accountId, accountId),
-					eq(email.type, emailConst.type.RECEIVE)
-				))
+			.where(and(...conditions))
 			.orderBy(desc(email.emailId))
 			.limit(20);
 
 		await this.emailAddAtt(c, list);
 
 		return list;
+	},
+
+	async domainStats(c, userId) {
+		const domains = this.envDomainList(c.env.domain);
+		if (domains.length === 0) {
+			return {
+				globalInboxUnread: 0,
+				spamUnread: 0,
+				domains: []
+			};
+		}
+
+		const placeholders = domains.map(() => '?').join(',');
+
+		const baseWhere = `
+			user_id = ?
+			AND type = ?
+			AND is_del = ?
+			AND unread = ?
+			AND status <> ?
+			AND LOWER(SUBSTR(to_email, INSTR(to_email, '@') + 1)) IN (${placeholders})
+		`;
+
+		const countUnread = async (spam) => {
+			const row = await c.env.db.prepare(`
+				SELECT COUNT(*) AS unreadCount
+				FROM email
+				WHERE ${baseWhere}
+					AND is_spam = ?
+			`).bind(
+				userId,
+				emailConst.type.RECEIVE,
+				isDel.NORMAL,
+				emailConst.unread.UNREAD,
+				emailConst.status.SAVING,
+				...domains,
+				spam
+			).first();
+			return Number(row?.unreadCount || 0);
+		};
+
+		const [{ results }, globalInboxUnread, spamUnread] = await Promise.all([
+			c.env.db.prepare(`
+			SELECT LOWER(SUBSTR(to_email, INSTR(to_email, '@') + 1)) AS domain,
+				COUNT(*) AS unreadCount
+			FROM email
+				WHERE ${baseWhere}
+				AND is_spam = ?
+			GROUP BY LOWER(SUBSTR(to_email, INSTR(to_email, '@') + 1))
+			`).bind(
+				userId,
+				emailConst.type.RECEIVE,
+				isDel.NORMAL,
+				emailConst.unread.UNREAD,
+				emailConst.status.SAVING,
+				...domains,
+				emailConst.spam.NORMAL
+			).all(),
+			countUnread(emailConst.spam.NORMAL),
+			countUnread(emailConst.spam.SPAM)
+		]);
+
+		const unreadMap = Object.fromEntries((results || []).map(row => [row.domain, Number(row.unreadCount || 0)]));
+		return {
+			globalInboxUnread,
+			spamUnread,
+			domains: domains.map(domain => ({
+				domain,
+				unreadCount: unreadMap[domain] || 0
+			}))
+		};
 	},
 
 	async physicsDelete(c, params) {
@@ -981,6 +1153,42 @@ const emailService = {
 	async physicsDeleteByAccountId(c, accountId) {
 		await attService.removeByAccountId(c, accountId);
 		await orm(c).delete(email).where(eq(email.accountId, accountId)).run();
+	},
+
+	normalizeDomain(domain) {
+		return String(domain || '').replace(/^@/, '').trim().toLowerCase();
+	},
+
+	envDomainList(domainList) {
+		if (typeof domainList === 'string') {
+			try {
+				domainList = JSON.parse(domainList);
+			} catch (e) {
+				domainList = domainList.split(',');
+			}
+		}
+
+		if (!Array.isArray(domainList)) {
+			return [];
+		}
+
+		return [...new Set(domainList.map(domain => this.normalizeDomain(domain)).filter(Boolean))];
+	},
+
+	domainFilter(field, domain) {
+		return sql`LOWER(SUBSTR(${field}, INSTR(${field}, '@') + 1)) = LOWER(${domain})`;
+	},
+
+	keywordFilter(keyword) {
+		const value = `%${keyword}%`;
+		return or(
+			sql`${email.name} COLLATE NOCASE LIKE ${value}`,
+			sql`${email.sendEmail} COLLATE NOCASE LIKE ${value}`,
+			sql`${email.toEmail} COLLATE NOCASE LIKE ${value}`,
+			sql`${email.subject} COLLATE NOCASE LIKE ${value}`,
+			sql`${email.text} COLLATE NOCASE LIKE ${value}`,
+			sql`${email.content} COLLATE NOCASE LIKE ${value}`
+		);
 	},
 
 	async read(c, params, userId) {

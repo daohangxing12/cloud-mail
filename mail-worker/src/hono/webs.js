@@ -11,6 +11,7 @@ import '../api/test-api';
 import '../api/r2-api';
 import '../api/resend-api';
 import '../api/user-api';
+import '../api/sub-account-api';
 import '../api/my-api';
 import '../api/role-api'
 import '../api/all-email-api'
@@ -20,4 +21,6 @@ import '../api/reg-key-api'
 import '../api/public-api'
 import '../api/telegram-api'
 import '../api/oauth-api'
+import '../api/local-agent-api'
+import '../api/asset-api'
 export default app;

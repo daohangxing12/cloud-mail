@@ -201,7 +201,8 @@ const loginService = {
 
 	async login(c, params, noVerifyPwd = false) {
 
-		const { email, password } = params;
+		const { password } = params;
+		const email = this.resolveLoginEmail(c, params.email);
 
 		if ((!email || !password) && !noVerifyPwd) {
 			throw new BizError(t('emailAndPwdEmpty'));
@@ -254,6 +255,14 @@ const loginService = {
 
 		await c.env.kv.put(KvConst.AUTH_INFO + userRow.userId, JSON.stringify(authInfo), { expirationTtl: constant.TOKEN_EXPIRE });
 		return jwt;
+	},
+
+	resolveLoginEmail(c, email) {
+		const loginEmail = String(email || '').trim();
+		if (loginEmail.toLowerCase() === 'admin') {
+			return c.env.admin;
+		}
+		return loginEmail;
 	},
 
 	async logout(c, userId) {

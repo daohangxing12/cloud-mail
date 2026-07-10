@@ -29,8 +29,78 @@ const dbInit = {
 		await this.v2_8DB(c);
 		await this.v2_9DB(c);
 		await this.v3_0DB(c);
+		await this.v3_1DB(c);
+		await this.v3_2DB(c);
+		await this.v3_3DB(c);
+		await this.v3_4DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_4DB(c) {
+		const statements = [
+			`ALTER TABLE account ADD COLUMN creator_rewards_username TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN creator_rewards_status TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN creator_rewards_joined_at TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN creator_rewards_rejected_at TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN creator_rewards_retry_at TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN creator_rewards_last_checked_at TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN creator_rewards_email_id INTEGER NOT NULL DEFAULT 0;`,
+			`ALTER TABLE account ADD COLUMN creator_rewards_subject TEXT NOT NULL DEFAULT '';`,
+			`CREATE INDEX IF NOT EXISTS idx_account_creator_rewards_status ON account(creator_rewards_status);`,
+			`CREATE INDEX IF NOT EXISTS idx_account_creator_rewards_retry_at ON account(creator_rewards_retry_at);`
+		];
+
+		for (const statement of statements) {
+			try {
+				await c.env.db.prepare(statement).run();
+			} catch (e) {
+				console.warn(`skip v3_4 db statement: ${e.message}`);
+			}
+		}
+	},
+
+	async v3_3DB(c) {
+		const statements = [
+			`ALTER TABLE account ADD COLUMN matrix_account_id TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN bit_browser_id TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN tiktok_followers INTEGER NOT NULL DEFAULT 0;`,
+			`ALTER TABLE account ADD COLUMN tiktok_views INTEGER NOT NULL DEFAULT 0;`,
+			`ALTER TABLE account ADD COLUMN tiktok_views_text TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN login_status TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN last_agent_sync_at TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE account ADD COLUMN last_stats_sync_at TEXT NOT NULL DEFAULT '';`,
+			`CREATE INDEX IF NOT EXISTS idx_account_bit_browser_id ON account(bit_browser_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_account_matrix_account_id ON account(matrix_account_id);`
+		];
+
+		for (const statement of statements) {
+			try {
+				await c.env.db.prepare(statement).run();
+			} catch (e) {
+				console.warn(`skip v3_3 db statement: ${e.message}`);
+			}
+		}
+	},
+
+	async v3_2DB(c) {
+		try {
+			await c.env.db.prepare(`ALTER TABLE account ADD COLUMN tiktok_username TEXT NOT NULL DEFAULT '';`).run();
+		} catch (e) {
+			console.warn(`跳过字段：${e.message}`);
+		}
+	},
+
+	async v3_1DB(c) {
+		try {
+			await c.env.db.batch([
+				c.env.db.prepare(`ALTER TABLE email ADD COLUMN is_spam INTEGER NOT NULL DEFAULT 0;`),
+				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_email_user_type_spam ON email(user_id, type, is_spam, email_id);`),
+				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_email_to_email ON email(to_email COLLATE NOCASE);`)
+			]);
+		} catch (e) {
+			console.warn(`跳过字段：${e.message}`);
+		}
 	},
 
 	async v3_0DB(c) {
@@ -580,6 +650,23 @@ const dbInit = {
 		  CREATE TABLE IF NOT EXISTS account (
 			account_id INTEGER PRIMARY KEY AUTOINCREMENT,
 			email TEXT NOT NULL,
+			tiktok_username TEXT NOT NULL DEFAULT '',
+			matrix_account_id TEXT NOT NULL DEFAULT '',
+			bit_browser_id TEXT NOT NULL DEFAULT '',
+			tiktok_followers INTEGER NOT NULL DEFAULT 0,
+			tiktok_views INTEGER NOT NULL DEFAULT 0,
+			tiktok_views_text TEXT NOT NULL DEFAULT '',
+			login_status TEXT NOT NULL DEFAULT '',
+			last_agent_sync_at TEXT NOT NULL DEFAULT '',
+			last_stats_sync_at TEXT NOT NULL DEFAULT '',
+			creator_rewards_username TEXT NOT NULL DEFAULT '',
+			creator_rewards_status TEXT NOT NULL DEFAULT '',
+			creator_rewards_joined_at TEXT NOT NULL DEFAULT '',
+			creator_rewards_rejected_at TEXT NOT NULL DEFAULT '',
+			creator_rewards_retry_at TEXT NOT NULL DEFAULT '',
+			creator_rewards_last_checked_at TEXT NOT NULL DEFAULT '',
+			creator_rewards_email_id INTEGER NOT NULL DEFAULT 0,
+			creator_rewards_subject TEXT NOT NULL DEFAULT '',
 			status INTEGER DEFAULT 0 NOT NULL,
 			latest_email_time DATETIME,
 			create_time DATETIME DEFAULT CURRENT_TIMESTAMP,

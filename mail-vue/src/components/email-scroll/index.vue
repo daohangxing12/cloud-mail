@@ -38,7 +38,7 @@
                         :key="keyCount"
         >
           <template #default="{ data: item, index }" >
-            <div :class="'email-row ' + props.type"
+            <div :class="['email-row', props.type, {'email-row-selected': item.emailId === props.selectedEmailId}]"
                  :data-checked="item.checked"
                  @click="jumpDetails(item)"
                  v-if="!item.expand"
@@ -53,57 +53,59 @@
                 <Icon v-else icon="solar:star-line-duotone" width="18" height="18"/>
               </div>
               <div v-if="!showStar"></div>
-              <div class="title" :class="accountShow ? 'title-column' : 'title-column'">
+              <div class="mail-avatar" :class="getAvatarMeta(item).className" aria-hidden="true">
+                <span>{{ getAvatarMeta(item).text }}</span>
+              </div>
+              <div class="title mail-card-body" :class="accountShow ? 'title-column' : 'title-column'">
 
-                <div class="email-sender" :style=" (showStatus ? 'gap: 10px;' : '') + ((item.unread === EmailUnreadEnum.UNREAD && showUnread)  ? 'font-weight: bold' : '')">
-                  <div class="email-status" v-if="showStatus">
-                    <el-tooltip effect="dark" :content="item.statusIcon.content">
-                      <Icon :icon="item.statusIcon.icon" :style="`color: ${item.statusIcon.color}`" width="20" height="20"/>
-                    </el-tooltip>
-                    <div class="del-status" v-if="item.isDel">
-                      <el-tooltip effect="dark" :content="item.isDelContent">
-                        <Icon class="icon" icon="mdi:email-remove" width="20" height="20"/>
+                <div class="mail-card-top">
+                  <div class="email-sender" :style=" (showStatus ? 'gap: 8px;' : '') + ((item.unread === EmailUnreadEnum.UNREAD && showUnread)  ? 'font-weight: bold' : '')">
+                    <div class="email-status" v-if="showStatus">
+                      <el-tooltip effect="dark" :content="item.statusIcon.content">
+                        <Icon :icon="item.statusIcon.icon" :style="`color: ${item.statusIcon.color}`" width="18" height="18"/>
                       </el-tooltip>
+                      <div class="del-status" v-if="item.isDel">
+                        <el-tooltip effect="dark" :content="item.isDelContent">
+                          <Icon class="icon" icon="mdi:email-remove" width="18" height="18"/>
+                        </el-tooltip>
+                      </div>
                     </div>
-                  </div>
-                  <div v-else></div>
-                  <span class="name">
-                    <span>
-                      <div class="unread" v-if="isMobile && (item.unread === EmailUnreadEnum.UNREAD && showUnread) "/>
-                      <slot name="name" :email="item"> {{ item.name }}</slot>
+                    <span class="name">
+                      <span>
+                        <div class="unread" v-if="isMobile && (item.unread === EmailUnreadEnum.UNREAD && showUnread) "/>
+                        <slot name="name" :email="item"> {{ getSenderName(item) }}</slot>
+                      </span>
+                      <span>
+                        <Icon v-if="item.isStar" icon="fluent-color:star-16" width="18" height="18"/>
+                      </span>
                     </span>
-                    <span>
-                      <Icon v-if="item.isStar" icon="fluent-color:star-16" width="18" height="18"/>
+                  </div>
+                  <span class="mail-card-time" :style="(item.unread === EmailUnreadEnum.UNREAD && showUnread) ? 'font-weight: bold' : ''">{{ item.formatCreateTime }}</span>
+                </div>
+                <div class="email-text">
+                  <span class="email-subject" :style="(item.unread === EmailUnreadEnum.UNREAD && showUnread)  ? 'font-weight: bold' : ''">
+                    <div class="unread" v-if="!isMobile && (item.unread === EmailUnreadEnum.UNREAD && showUnread) "/>
+                    <span v-if="item.code" class="code-tag" @click.stop="copyCode(item.code)">[{{ t('codeLabel') }}{{ item.code }}]</span>
+                    <span class="subject-text">
+                      <slot name="subject" :email="item" >
+                        {{ item.subject || '\u200B' }}
+                      </slot>
                     </span>
                   </span>
-                  <span class="phone-time">{{ item.formatCreateTime }}</span>
+                  <span class="email-content">{{ item.formatText || '\u200B' }}</span>
                 </div>
-                <div>
-                  <div class="email-text">
-                    <span class="email-subject" :style="(item.unread === EmailUnreadEnum.UNREAD && showUnread)  ? 'font-weight: bold' : ''">
-                      <div class="unread" v-if="!isMobile && (item.unread === EmailUnreadEnum.UNREAD && showUnread) "/>
-                      <span v-if="item.code" class="code-tag" @click.stop="copyCode(item.code)">[{{ t('codeLabel') }}{{ item.code }}]</span>
-                      <span class="subject-text">
-                        <slot name="subject" :email="item" >
-                          {{ item.subject || '\u200B' }}
-                        </slot>
-                      </span>
+                <div class="user-info" v-if="showUserInfo">
+                  <div class="user">
+                    <span>
+                      <Icon icon="mynaui:user" width="20" height="20"/>
                     </span>
-                    <span class="email-content">{{ item.formatText || '\u200B' }}</span>
+                    <span>{{ item.userEmail }}</span>
                   </div>
-                  <div class="user-info" v-if="showUserInfo">
-                    <div class="user">
-                      <span>
-                        <Icon icon="mynaui:user" width="20" height="20"/>
-                      </span>
-                      <span>{{ item.userEmail }}</span>
-                    </div>
-                    <div class="account">
-                      <span>
-                        <Icon icon="mdi-light:email" width="20" height="20"/>
-                      </span>
-                      <span>{{ item.type === 0 ? item.toEmail : item.sendEmail }}</span>
-                    </div>
+                  <div class="account">
+                    <span>
+                      <Icon icon="mdi-light:email" width="20" height="20"/>
+                    </span>
+                    <span>{{ item.type === 0 ? item.toEmail : item.sendEmail }}</span>
                   </div>
                 </div>
               </div>
@@ -195,6 +197,14 @@
               </div>
             </template>
           </el-dropdown-item>
+          <el-dropdown-item v-if="['email','star'].includes(props.type) && rightClickEmail.type === 0 && rightClickEmail.sendEmail && rightClickEmail.isSpam !== 1" @click="blockSender(rightClickEmail)">
+            <template #default>
+              <div class="right-dropdown-item">
+                <Icon icon="mdi:email-lock-outline" width="20" height="20" />
+                <span>拉黑发件人</span>
+              </div>
+            </template>
+          </el-dropdown-item>
           <el-dropdown-item v-if="props.type === 'all-email'" @click="handleSearch('user', rightClickEmail.userEmail)">
             <template #default>
               <div class="right-dropdown-item">
@@ -269,7 +279,7 @@ const props = defineProps({
   },
   showAccountIcon: {
     type: Boolean,
-    default: true,
+    default: false,
   },
   showUserInfo: {
     type: Boolean,
@@ -294,10 +304,14 @@ const props = defineProps({
   showUnread: {
     type: Boolean,
     default: false
+  },
+  selectedEmailId: {
+    type: Number,
+    default: 0
   }
 })
 
-const emit = defineEmits(['jump', 'refresh-before', 'delete-draft', 'right-search'])
+const emit = defineEmits(['jump', 'refresh-before', 'delete-draft', 'right-search', 'block-sender'])
 const {t} = useI18n()
 const settingStore = useSettingStore()
 const uiStore = useUiStore();
@@ -395,9 +409,9 @@ const list = computed(() => {
 
 const itemHeight = computed(() => {
     if (props.type === 'all-email') {
-      return isMobile.value ? 132 : 65;
+      return isMobile.value ? 104 : 86;
     } else  {
-      return isMobile.value ? 83 : 48;
+      return isMobile.value ? 72 : 68;
     }
 })
 
@@ -582,6 +596,34 @@ function cleanSpace(text) {
       .trim();
 }
 
+function getSenderName(email) {
+  return cleanSpace(email?.name || email?.sendEmail || email?.toEmail || '未知发件人')
+}
+
+function getAvatarMeta(email) {
+  const name = getSenderName(email)
+  const key = `${name} ${email?.sendEmail || ''}`.toLowerCase()
+
+  if (key.includes('tiktok')) {
+    return { text: '♪', className: 'mail-avatar-tiktok' }
+  }
+
+  if (key.includes('microsoft')) {
+    return { text: 'M', className: 'mail-avatar-microsoft' }
+  }
+
+  if (key.includes('capcut')) {
+    return { text: 'C', className: 'mail-avatar-capcut' }
+  }
+
+  if (key.includes('shop')) {
+    return { text: 'S', className: 'mail-avatar-shop' }
+  }
+
+  const text = name.replace(/^["'<\s]+/, '').charAt(0).toUpperCase() || '?'
+  return { text, className: 'mail-avatar-letter' }
+}
+
 function starChange(email) {
 
   if (!email.isStar) {
@@ -625,13 +667,18 @@ function emailRead(emailId) {
 }
 
 function localRead(emailIds) {
+  let changed = false
   emailIds.forEach(emailId => {
     const index = emailList.findIndex(email => email.emailId === emailId);
     if (index > -1) {
+      changed = changed || emailList[index].unread === EmailUnreadEnum.UNREAD;
       emailList[index].unread = EmailUnreadEnum.READ;
       emailList[index].checked = false;
     }
   })
+  if (changed) {
+    window.dispatchEvent(new CustomEvent('mail-unread-changed'))
+  }
 }
 
 function rightDelete(emailId) {
@@ -665,6 +712,10 @@ function rightDelete(emailId) {
 
 function handleSearch(type, value) {
   emit('right-search', type, value);
+}
+
+function blockSender(email) {
+  emit('block-sender', email);
 }
 
 async function copyCode(code) {
@@ -1237,9 +1288,223 @@ function loadData() {
     z-index: 0;
   }
 
+  &.email-row-selected {
+    background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+    box-shadow: inset 3px 0 0 var(--el-color-primary), var(--header-actions-border);
+  }
+
   /*&[data-checked="true"] {
     background-color: #c2dbff;
   }*/
+}
+
+:deep(.email-row) {
+  display: grid;
+  grid-template-columns: 22px 24px 44px minmax(0, 1fr);
+  gap: 8px;
+  height: 68px;
+  padding: 8px 12px;
+  justify-content: normal;
+  align-items: center;
+  background: var(--el-bg-color);
+
+  @media (max-width: 1366px) {
+    height: 72px;
+  }
+
+  &.all-email {
+    height: 86px;
+
+    @media (max-width: 1366px) {
+      height: 104px;
+    }
+  }
+
+  .checkbox,
+  .all-email-checkbox {
+    width: 22px;
+    padding: 0;
+    justify-content: center;
+    align-self: center;
+  }
+
+  .pc-star {
+    width: 24px;
+    min-width: 24px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .mail-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    user-select: none;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+  }
+
+  .mail-avatar-tiktok {
+    background: #070707;
+    text-shadow: 1px 0 #25f4ee, -1px 0 #fe2c55;
+  }
+
+  .mail-avatar-microsoft {
+    background: linear-gradient(135deg, #f25022 0 50%, #7fba00 50% 100%);
+  }
+
+  .mail-avatar-capcut {
+    background: #111827;
+  }
+
+  .mail-avatar-shop {
+    background: #b45309;
+  }
+
+  .mail-avatar-letter {
+    background: linear-gradient(135deg, #3b82f6, #0f766e);
+  }
+
+  .mail-avatar-skeleton {
+    overflow: hidden;
+    background: var(--el-fill-color-light);
+    box-shadow: none;
+
+    .el-skeleton,
+    .el-skeleton__item {
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  .title.mail-card-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+    padding-right: 4px;
+  }
+
+  .mail-card-top {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .email-sender {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    color: var(--el-text-color-primary);
+  }
+
+  .email-status {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .name {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    line-height: 18px;
+  }
+
+  .name > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .mail-card-time {
+    flex: 0 0 auto;
+    max-width: 74px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--el-text-color-regular);
+    font-size: 12px;
+    line-height: 18px;
+    text-align: right;
+  }
+
+  .phone-time,
+  .email-right,
+  .email-right-skeleton {
+    display: none;
+  }
+
+  .email-text,
+  .email-text-skeleton {
+    min-width: 0;
+    display: block;
+  }
+
+  .email-text-skeleton .text-skeleton-one {
+    width: 78%;
+    height: 15px;
+  }
+
+  .email-text-skeleton .text-skeleton-two {
+    width: 92%;
+    height: 14px;
+  }
+
+  .email-subject {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    color: var(--el-text-color-primary);
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  .subject-text {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .email-content {
+    display: block;
+    margin-top: 1px;
+    padding-left: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--email-scroll-content-color);
+    font-size: 12px;
+    line-height: 17px;
+  }
+
+  .code-tag {
+    height: 18px;
+    line-height: 18px;
+    max-width: 130px;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+    color: var(--el-color-primary);
+    font-size: 12px;
+  }
 }
 
 
@@ -1254,16 +1519,61 @@ function loadData() {
 
 @media (max-width: 1366px) {
   .pc-star {
-    display: none;
+    display: flex;
   }
   .phone-star {
-    display: block;
+    display: none;
     align-self: end;
     padding-right: 16px;
     padding-top: 8px;
   }
   .star-pd {
     padding-top: 6px !important;
+  }
+}
+
+:deep(.email-row) {
+  .title.mail-card-body {
+    width: auto !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex: initial !important;
+    grid-template-columns: none !important;
+  }
+
+  .mail-card-top {
+    width: 100%;
+    min-width: 0;
+    display: flex !important;
+  }
+
+  .title.mail-card-body .email-sender {
+    min-width: 0 !important;
+    flex: 1 1 auto;
+    display: flex !important;
+    grid-template-columns: none !important;
+    overflow: hidden;
+  }
+
+  .title.mail-card-body .name {
+    min-width: 0 !important;
+    flex: 1 1 auto;
+    display: flex !important;
+    grid-template-columns: none !important;
+  }
+
+  .title.mail-card-body .email-text,
+  .title.mail-card-body .email-text-skeleton {
+    width: 100%;
+    min-width: 0 !important;
+    display: block !important;
+    grid-template-columns: none !important;
+  }
+
+  .title.mail-card-body .email-subject,
+  .title.mail-card-body .email-content {
+    width: 100%;
+    min-width: 0;
   }
 }
 

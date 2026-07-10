@@ -22,6 +22,16 @@ const routes = [
                 }
             },
             {
+                path: '/spam',
+                name: 'spam',
+                component: () => import('@/views/spam/index.vue'),
+                meta: {
+                    title: '垃圾邮件',
+                    name: 'spam',
+                    menu: true
+                }
+            },
+            {
                 path: '/message',
                 name: 'content',
                 component: () => import('@/views/content/index.vue'),
@@ -159,11 +169,7 @@ router.afterEach((to) => {
 
     const uiStore = useUiStore()
     if (to.meta.menu) {
-        if (['content', 'email', 'send'].includes(to.meta.name)) {
-            uiStore.accountShow = window.innerWidth > 767;
-        } else {
-            uiStore.accountShow = false
-        }
+        uiStore.accountShow = false
     }
 
     if (window.innerWidth < 1025) {

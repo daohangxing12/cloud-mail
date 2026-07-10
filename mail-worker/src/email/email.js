@@ -11,6 +11,8 @@ import roleService from '../service/role-service';
 import userService from '../service/user-service';
 import telegramService from '../service/telegram-service';
 import aiService from '../service/ai-service';
+import subAccountService from '../service/sub-account-service';
+import creatorRewardsService from '../service/creator-rewards-service';
 
 export async function email(message, env, ctx) {
 
@@ -52,12 +54,17 @@ export async function email(message, env, ctx) {
 
 		const blockFlag = checkBlock(blackSubject, blackContent, blackFrom, email);
 
-		if (blockFlag) {
-			message.setReject('Message rejected');
-			return;
-		}
+		let account = await accountService.selectByEmailIncludeDel({ env: env }, message.to);
+		let catchAllReceive = false;
 
-		const account = await accountService.selectByEmailIncludeDel({ env: env }, message.to);
+		// Catch-all mail should not require a pre-created sub-account.
+		if (!account && isManagedEmailDomain(env, message.to)) {
+			const adminAccount = await accountService.selectByEmailIncludeDel({ env: env }, env.admin);
+			if (adminAccount) {
+				account = adminAccount;
+				catchAllReceive = true;
+			}
+		}
 
 		if (!account && noRecipient === settingConst.noRecipient.CLOSE) {
 			message.setReject('Recipient not found');
@@ -111,6 +118,7 @@ export async function email(message, env, ctx) {
 			messageId: email.messageId,
 			userId: account ? account.userId : 0,
 			accountId: account ? account.accountId : 0,
+			isSpam: blockFlag ? emailConst.spam.SPAM : emailConst.spam.NORMAL,
 			isDel: isDel.DELETE,
 			status: emailConst.status.SAVING
 		};
@@ -144,7 +152,10 @@ export async function email(message, env, ctx) {
 			console.error(e);
 		}
 
-		emailRow = await emailService.completeReceive({ env }, account ? emailConst.status.RECEIVE : emailConst.status.NOONE, emailRow.emailId);
+		emailRow = await emailService.completeReceive({ env }, account && !catchAllReceive ? emailConst.status.RECEIVE : emailConst.status.NOONE, emailRow.emailId);
+
+		await subAccountService.updateTikTokFromEmail({ env }, message.to, email);
+		await creatorRewardsService.updateFromIncomingEmail({ env }, message.to, email, emailRow);
 
 
 		if (ruleType === settingConst.ruleType.RULE) {
@@ -185,6 +196,25 @@ export async function email(message, env, ctx) {
 	}
 }
 
+function isManagedEmailDomain(env, address) {
+	const domain = emailUtils.getDomain(address || '').toLowerCase();
+	let domainList = env.domain;
+
+	if (typeof domainList === 'string') {
+		try {
+			domainList = JSON.parse(domainList);
+		} catch (e) {
+			domainList = domainList.split(',');
+		}
+	}
+
+	if (!Array.isArray(domainList)) {
+		return false;
+	}
+
+	return domainList.map(item => String(item).replace(/^@/, '').toLowerCase()).includes(domain);
+}
+
 function checkBlock(blackSubjectStr, blackContentStr, blackFromStr, email) {
 
 	const blackFromList = blackFromStr ? blackFromStr.split(',') : []
@@ -203,8 +233,10 @@ function checkBlock(blackSubjectStr, blackContentStr, blackFromStr, email) {
 		}
 	}
 
+	const senderAddress = String(email.from?.address || '').trim().toLowerCase();
 	for (const blackFrom of blackFromList) {
-		if (email.from.address === blackFrom || emailUtils.getDomain(email.from.address) === blackFrom) {
+		const senderRule = String(blackFrom || '').trim().toLowerCase();
+		if (senderRule && senderAddress === senderRule) {
 			return true
 		}
 	}

@@ -7,24 +7,32 @@
         <Icon style="color: var(--el-border-color)" icon="solar:star-line-duotone" width="18" height="18"/>
       </div>
       <div v-if="!showStar"></div>
-      <div class="title" :class="accountShow ? 'title-column' : 'title-column'">
+      <div class="mail-avatar mail-avatar-skeleton">
+        <el-skeleton animated>
+          <template #template>
+            <el-skeleton-item variant="text" style="width: 100%;height: 100%;border-radius: 10px;"/>
+          </template>
+        </el-skeleton>
+      </div>
+      <div class="title mail-card-body" :class="accountShow ? 'title-column' : 'title-column'">
 
-        <div class="email-sender">
-          <div class="email-status" v-if="showStatus">
+        <div class="mail-card-top">
+          <div class="email-sender">
+            <div class="email-status" v-if="showStatus">
 
+            </div>
+            <span class="name">
+               <span>
+                 <el-skeleton animated>
+                   <template #template>
+                     <el-skeleton-item variant="text" class="name-skeleton"/>
+                   </template>
+                 </el-skeleton>
+               </span>
+               <span></span>
+            </span>
           </div>
-          <div v-else></div>
-          <span class="name">
-             <span>
-               <el-skeleton animated>
-                 <template #template>
-                   <el-skeleton-item variant="text" class="name-skeleton"/>
-                 </template>
-               </el-skeleton>
-             </span>
-             <span></span>
-          </span>
-          <span class="phone-time">
+          <span class="mail-card-time">
             <el-skeleton animated>
               <template #template>
                 <el-skeleton-item variant="text" style="width: 50px;height: 1rem;"/>
@@ -32,35 +40,33 @@
             </el-skeleton>
           </span>
         </div>
-        <div>
-          <div class="email-text-skeleton">
+        <div class="email-text-skeleton">
+          <el-skeleton animated>
+            <template #template>
+              <el-skeleton-item variant="text" class="text-skeleton-one"/>
+              <el-skeleton-item variant="text" class="text-skeleton-two"/>
+            </template>
+          </el-skeleton>
+        </div>
+        <div class="user-info" v-if="showUserInfo">
+          <div class="user">
             <el-skeleton animated>
               <template #template>
-                <el-skeleton-item variant="text" class="text-skeleton-one"/>
-                <el-skeleton-item variant="text" class="text-skeleton-two"/>
+                <el-skeleton-item variant="text"
+                                  style="width: 180px;margin-right: 5px;height: 1rem;margin-bottom: 4px;"/>
               </template>
             </el-skeleton>
           </div>
-          <div class="user-info" v-if="showUserInfo">
-            <div class="user">
-              <el-skeleton animated>
-                <template #template>
-                  <el-skeleton-item variant="text"
-                                    style="width: 180px;margin-right: 5px;height: 1rem;margin-bottom: 4px;"/>
-                </template>
-              </el-skeleton>
-            </div>
-            <div class="account">
-              <el-skeleton animated>
-                <template #template>
-                  <el-skeleton-item variant="text"
-                                    style="width: 180px;margin-right: 5px;height: 1rem;margin-bottom: 4px;"/>
-                </template>
-              </el-skeleton>
-            </div>
-            <div class="del-status" v-if="item.isDel">
-              <el-tag type="danger" size="small">{{ $t('deleted') }}</el-tag>
-            </div>
+          <div class="account">
+            <el-skeleton animated>
+              <template #template>
+                <el-skeleton-item variant="text"
+                                  style="width: 180px;margin-right: 5px;height: 1rem;margin-bottom: 4px;"/>
+              </template>
+            </el-skeleton>
+          </div>
+          <div class="del-status" v-if="item.isDel">
+            <el-tag type="danger" size="small">{{ $t('deleted') }}</el-tag>
           </div>
         </div>
       </div>

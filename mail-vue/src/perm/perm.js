@@ -59,16 +59,48 @@ const routers = {
             }
         }
     ],
-    'user:query': [{
-        path: '/all-users',
-        name: 'user',
-        component: () => import('@/views/user/index.vue'),
-        meta: {
-            title: 'allUsers',
+    'user:query': [
+        {
+            path: '/asset-overview',
+            name: 'asset-overview',
+            component: () => import('@/views/asset-overview/index.vue'),
+            meta: {
+                title: '资产概览',
+                name: 'asset-overview',
+                menu: true
+            }
+        },
+        {
+            path: '/assets',
+            name: 'email-assets',
+            component: () => import('@/views/email-assets/index.vue'),
+            meta: {
+                title: '邮箱资产',
+                name: 'email-assets',
+                menu: true
+            }
+        },
+        {
+            path: '/all-users',
             name: 'user',
-            menu: true
+            component: () => import('@/views/user/index.vue'),
+            meta: {
+                title: 'allUsers',
+                name: 'user',
+                menu: true
+            }
+        },
+        {
+            path: '/sub-accounts',
+            name: 'sub-account',
+            component: () => import('@/views/sub-account/index.vue'),
+            meta: {
+                title: '子邮箱管理',
+                name: 'sub-account',
+                menu: true
+            }
         }
-    }],
+    ],
     'role:query': [{
         path: '/role',
         name: 'role',

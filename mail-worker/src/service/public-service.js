@@ -1,7 +1,7 @@
 import BizError from '../error/biz-error';
 import orm from '../entity/orm';
 import { v4 as uuidv4 } from 'uuid';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
 import saltHashUtils from '../utils/crypto-utils';
 import cryptoUtils from '../utils/crypto-utils';
 import emailUtils from '../utils/email-utils';
@@ -10,12 +10,179 @@ import verifyUtils from '../utils/verify-utils';
 import { t } from '../i18n/i18n';
 import reqUtils from '../utils/req-utils';
 import dayjs from 'dayjs';
-import { isDel, roleConst } from '../const/entity-const';
+import { emailConst, isDel, roleConst } from '../const/entity-const';
 import email from '../entity/email';
 import userService from './user-service';
 import KvConst from '../const/kv-const';
+import codeUtils from '../utils/code-utils';
+import constant from '../const/constant';
 
 const publicService = {
+
+	async latestCode(c, params) {
+		const list = await this.codeList(c, { ...params, size: 1 });
+		return list[0] || null;
+	},
+
+	async getNewTkMailCode(c, params) {
+		await this.verifyPublicToken(c, params);
+
+		const username = params.username || params.email || params.toEmail;
+		const includeText = params.includeText === '1' || params.includeText === 'true';
+		return this.latestCode(c, {
+			email: username,
+			toEmail: username,
+			fromEmail: params.fromEmail,
+			subject: params.subject,
+			sinceMinutes: params.sinceMinutes,
+			includeText
+		});
+	},
+
+	async verifyPublicToken(c, params) {
+		const publicToken = params.token || params.key || c.req.header(constant.TOKEN_HEADER);
+		const targetEmail = this.normalizeEmail(params.username || params.email || params.toEmail);
+
+		if (targetEmail) {
+			if (!verifyUtils.isEmail(targetEmail)) {
+				throw new BizError(t('notEmail'));
+			}
+			this.verifyDomain(c, targetEmail);
+
+			const accountRow = await c.env.db.prepare(`
+				SELECT account_id AS accountId, is_del AS isDel
+				FROM account
+				WHERE email COLLATE NOCASE = ?
+			`).bind(targetEmail).first();
+
+			if (!accountRow || accountRow.isDel === isDel.DELETE) {
+				throw new BizError('account not found', 404);
+			}
+
+			const subAccountToken = await c.env.kv.get(KvConst.SUB_ACCOUNT_TOKEN + targetEmail);
+			if (!publicToken || publicToken !== subAccountToken) {
+				throw new BizError(t('publicTokenFail'), 401);
+			}
+			return;
+		}
+
+		const userPublicToken = await c.env.kv.get(KvConst.PUBLIC_KEY);
+		if (!publicToken || publicToken !== userPublicToken) {
+			throw new BizError(t('publicTokenFail'), 401);
+		}
+	},
+
+	async codeList(c, params) {
+
+		let {
+			email: receiveEmail,
+			toEmail,
+			fromEmail,
+			subject,
+			sinceMinutes,
+			size,
+			includeText
+		} = params;
+
+		toEmail = toEmail || receiveEmail;
+
+		if (!toEmail) {
+			throw new BizError(t('emptyEmail'));
+		}
+
+		if (!verifyUtils.isEmail(toEmail)) {
+			throw new BizError(t('notEmail'));
+		}
+
+		this.verifyDomain(c, toEmail);
+
+		size = Number(size || 10);
+		if (Number.isNaN(size) || size < 1) {
+			size = 10;
+		}
+		if (size > 20) {
+			size = 20;
+		}
+
+		sinceMinutes = Number(sinceMinutes || 30);
+		if (Number.isNaN(sinceMinutes) || sinceMinutes < 1) {
+			sinceMinutes = 30;
+		}
+		if (sinceMinutes > 1440) {
+			sinceMinutes = 1440;
+		}
+
+		const conditions = [
+			sql`${email.toEmail} COLLATE NOCASE = ${toEmail}`,
+			eq(email.type, emailConst.type.RECEIVE),
+			eq(email.isDel, isDel.NORMAL),
+			sql`${email.status} IN (${emailConst.status.RECEIVE}, ${emailConst.status.NOONE})`,
+			gte(email.createTime, dayjs().subtract(sinceMinutes, 'minute').format('YYYY-MM-DD HH:mm:ss'))
+		];
+
+		if (fromEmail) {
+			if (verifyUtils.isEmail(fromEmail)) {
+				conditions.push(sql`${email.sendEmail} COLLATE NOCASE = ${fromEmail}`);
+			} else {
+				conditions.push(sql`${email.sendEmail} COLLATE NOCASE LIKE ${'%' + fromEmail}`);
+			}
+		}
+
+		if (subject) {
+			conditions.push(sql`${email.subject} COLLATE NOCASE LIKE ${'%' + subject + '%'}`);
+		}
+
+		const rows = await orm(c)
+			.select({
+				emailId: email.emailId,
+				toEmail: email.toEmail,
+				toName: email.toName,
+				sendEmail: email.sendEmail,
+				sendName: email.name,
+				subject: email.subject,
+				code: email.code,
+				text: email.text,
+				content: email.content,
+				createTime: email.createTime
+			})
+			.from(email)
+			.where(and(...conditions))
+			.orderBy(desc(email.emailId))
+			.limit(size)
+			.all();
+
+		return rows.map(row => this.toCodeResult(row, includeText));
+	},
+
+	toCodeResult(row, includeText) {
+		const data = {
+			emailId: row.emailId,
+			email: row.toEmail,
+			toName: row.toName,
+			fromEmail: row.sendEmail,
+			fromName: row.sendName,
+			subject: row.subject,
+			code: codeUtils.extract(row),
+			createTime: row.createTime
+		};
+
+		if (includeText) {
+			data.text = codeUtils.toSnippet(row);
+		}
+
+		return data;
+	},
+
+	verifyDomain(c, email) {
+		const domainList = Array.isArray(c.env.domain) ? c.env.domain : [];
+		if (!domainList.includes(emailUtils.getDomain(email))) {
+			throw new BizError(t('notEmailDomain'));
+		}
+	},
+
+	normalizeEmail(email) {
+		return String(email || '').trim().toLowerCase();
+	},
 
 	async emailList(c, params) {
 

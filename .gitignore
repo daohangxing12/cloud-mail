@@ -24,4 +24,8 @@ dist
 mail-vue/node_modules
 mail-vue/dist
 .wrangler
+mail-worker/.wrangler/
+mail-worker/.wrangler-*/
+mail-worker/.wrangler-dry-run*/
+*.bak_*
 .venv

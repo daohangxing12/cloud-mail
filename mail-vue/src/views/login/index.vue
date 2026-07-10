@@ -14,31 +14,7 @@
         <span class="form-desc" v-if="show === 'login'">{{ $t('loginTitle') }}</span>
         <span class="form-desc" v-else>{{ $t('regTitle') }}</span>
         <div v-show="show === 'login'">
-          <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="form.email"
-                    type="text" :placeholder="$t('emailAccount')" autocomplete="off">
-            <template #append v-if="!hideLoginDomain">
-              <div @click.stop="openSelect">
-                <el-select
-                    v-if="show === 'login'"
-                    ref="mySelect"
-                    v-model="suffix"
-                    :placeholder="$t('select')"
-                    class="select"
-                >
-                  <el-option
-                      v-for="item in domainList"
-                      :key="item"
-                      :label="item"
-                      :value="item"
-                  />
-                </el-select>
-                <div style="color: var(--el-text-color-primary)">
-                  <span>{{ suffix }}</span>
-                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-                </div>
-              </div>
-            </template>
-          </el-input>
+          <el-input v-model="form.email" type="text" placeholder="账号" autocomplete="off"/>
           <el-input v-model="form.password" :placeholder="$t('password')" type="password" autocomplete="off">
           </el-input>
           <el-button class="btn" type="primary" @click="submit" :loading="loginLoading"
@@ -98,7 +74,7 @@
             <el-avatar src="/image/linuxdo.webp" :size="18" style="margin-right: 10px" />LinuxDo
           </el-button>
         </div>
-        <template v-if="settingStore.settings.register === 0">
+        <template v-if="false">
           <div class="switch" @click="show = 'register'" v-if="show === 'login'">{{ $t('noAccount') }}
             <span>{{ $t('regSwitch') }}</span></div>
           <div class="switch" @click="show = 'login'" v-else>{{ $t('hasAccount') }} <span>{{ $t('loginSwitch') }}</span>
@@ -237,7 +213,7 @@ const loginOpacity = computed(() => {
   return uiStore.dark ? `rgba(0, 0, 0, ${opacity})` : `rgba(255, 255, 255, ${opacity})`
 })
 
-const hideLoginDomain = computed(() => settingStore.settings.loginDomain === 1)
+const hideLoginDomain = computed(() => true)
 
 const background = computed(() => {
 
@@ -328,9 +304,9 @@ function bind() {
   let email = getFullEmail(bindForm.email);
 
 
-  if (!isEmail(email)) {
+  if (email.toLowerCase() !== 'admin' && !isEmail(email)) {
     ElMessage({
-      message: t('notEmailMsg'),
+      message: '请输入 admin 或完整邮箱账号',
       type: 'error',
       plain: true,
     })
@@ -374,9 +350,9 @@ const submit = () => {
 
   let email = getFullEmail(form.email);
 
-  if (!isEmail(email)) {
+  if (email.toLowerCase() !== 'admin' && !isEmail(email)) {
     ElMessage({
-      message: t('notEmailMsg'),
+      message: '请输入 admin 或完整邮箱账号',
       type: 'error',
       plain: true,
     })

@@ -46,7 +46,7 @@ onMounted(() => {
   emailStore.sendScroll = sendScroll;
 })
 
-watch(() => accountStore.currentAccountId, () => {
+watch(() => [accountStore.currentAccountId, accountStore.currentDomain], () => {
   sendScroll.value.refreshList();
 })
 
@@ -74,7 +74,8 @@ function cancelStar(email) {
 function getEmailList(emailId, size) {
   const accountId =  accountStore.currentAccountId;
   const allReceive = accountStore.currentAccount.allReceive;
-  return emailList(accountId, allReceive, emailId, params.timeSort, size, 1).then(data => {
+  const domain = accountStore.currentDomain;
+  return emailList(accountId, allReceive, emailId, params.timeSort, size, 1, domain, 0).then(data => {
     data.latestEmail.reqAccountId = accountId;
     data.latestEmail.allReceive = allReceive;
     return data;

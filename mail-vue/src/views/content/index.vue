@@ -1,8 +1,11 @@
 <template>
-  <div class="box">
+  <div class="box" v-if="email && email.emailId">
     <div class="header-actions">
-      <Icon class="icon" icon="material-symbols-light:arrow-back-ios-new" width="20" height="20" @click="handleBack"/>
+      <Icon v-if="!props.embedded" class="icon" icon="material-symbols-light:arrow-back-ios-new" width="20" height="20" @click="handleBack"/>
       <Icon v-perm="'email:delete'" class="icon" icon="uiw:delete" width="16" height="16" @click="handleDelete"/>
+      <el-tooltip v-if="email.type === 0 && email.isSpam !== 1 && email.sendEmail" content="拉黑发件人，邮件进入垃圾邮箱" effect="dark">
+        <Icon v-perm="'setting:set'" class="icon" icon="mdi:email-lock-outline" width="21" height="21" @click="handleBlockSender"/>
+      </el-tooltip>
       <span class="star" v-if="emailStore.contentData.showStar">
         <Icon class="icon" @click="changeStar" v-if="email.isStar" icon="fluent-color:star-16" width="20" height="20"/>
         <Icon class="icon" @click="changeStar" v-else icon="solar:star-line-duotone" width="18" height="18"/>
@@ -72,13 +75,16 @@
         @close="showPreview = false"
     />
   </div>
+  <div class="empty-content" v-else>
+    <el-empty description="请选择一封邮件"/>
+  </div>
 </template>
 <script setup>
 import ShadowHtml from '@/components/shadow-html/index.vue'
 import {reactive, ref, watch, onMounted, onUnmounted} from "vue";
 import {useRouter} from 'vue-router'
 import {ElMessage, ElMessageBox} from 'element-plus'
-import {emailDelete, emailRead} from "@/request/email.js";
+import {emailBlockSender, emailDelete, emailRead} from "@/request/email.js";
 import {Icon} from "@iconify/vue";
 import {useEmailStore} from "@/store/email.js";
 import {useAccountStore} from "@/store/account.js";
@@ -103,14 +109,25 @@ const showPreview = ref(false)
 const srcList = reactive([])
 
 const { t } = useI18n()
+const props = defineProps({
+  embedded: {
+    type: Boolean,
+    default: false
+  }
+})
+const emit = defineEmits(['close'])
+
 watch(() => accountStore.currentAccountId, () => {
   handleBack()
 })
 
 onMounted(() => {
+  if (!email?.emailId) return
   if (emailStore.contentData.showUnread && email.unread === EmailUnreadEnum.UNREAD) {
     email.unread = EmailUnreadEnum.READ;
-    emailRead([email.emailId]);
+    emailRead([email.emailId]).finally(() => {
+      window.dispatchEvent(new CustomEvent('mail-unread-changed'))
+    });
   }
 })
 
@@ -180,7 +197,31 @@ function changeStar() {
 }
 
 const handleBack = () => {
+  if (props.embedded) {
+    emit('close')
+    return
+  }
   router.back()
+}
+
+const handleBlockSender = () => {
+  ElMessageBox.confirm(`确认拉黑 ${email.sendEmail}？以后这个发件人的邮件会进入垃圾邮箱。`, {
+    confirmButtonText: t('confirm'),
+    cancelButtonText: t('cancel'),
+    type: 'warning'
+  }).then(() => {
+    emailBlockSender(email.emailId).then(() => {
+      ElMessage({
+        message: '已拉黑发件人，邮件已进入垃圾邮箱',
+        type: 'success',
+        plain: true,
+      })
+      emailStore.deleteIds = [email.emailId]
+      window.dispatchEvent(new CustomEvent('mail-unread-changed'))
+      window.dispatchEvent(new CustomEvent('mail-insights-changed'))
+      emit('close')
+    })
+  })
 }
 
 const handleDelete = () => {
@@ -210,7 +251,11 @@ const handleDelete = () => {
       })
     }
 
-    router.back()
+    if (props.embedded) {
+      emit('close')
+    } else {
+      router.back()
+    }
   })
 }
 </script>
@@ -218,6 +263,14 @@ const handleDelete = () => {
 .box {
   height: 100%;
   overflow: hidden;
+}
+
+.empty-content {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--el-bg-color);
 }
 
 .header-actions {

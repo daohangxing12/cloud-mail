@@ -1,550 +1,324 @@
 <template>
   <div class="account-box">
     <div class="head-opt">
-      <Icon v-perm="'account:add'" class="icon add" icon="ion:add-outline" width="23" height="23" @click="add"/>
-      <Icon class="icon refresh" icon="ion:reload" width="18" height="18" @click="refresh"/>
+      <span class="head-title">域名邮箱</span>
+      <div class="head-icons">
+        <Icon
+            v-if="hasPerm('user:query')"
+            class="icon"
+            icon="fluent:mail-inbox-add-20-regular"
+            width="21"
+            height="21"
+            title="管理子邮箱"
+            @click="openSubAccounts()"
+        />
+        <Icon class="icon" icon="ion:reload" width="18" height="18" title="刷新" @click="refresh"/>
+      </div>
     </div>
-    <el-scrollbar class="scrollbar" ref="scrollbarRef">
-      <div v-infinite-scroll="getAccountList" :infinite-scroll-distance="600" :infinite-scroll-immediate="false">
-        <el-card class="item" :class="itemBg(item.accountId)" v-for="(item, index) in accounts" :key="item.accountId"
-                 @click="changeAccount(item)">
-          <div class="account">
-            {{ item.email }}
-          </div>
-          <div class="opt">
-            <div class="send-email" @click.stop>
-              <Icon @click="setAllReceive(item)" v-if="!item.allReceive" icon="eva:email-fill" width="22" height="22" color="#fccb1a"/>
-              <Icon @click="setAllReceive(item)" v-else icon="flat-color-icons:folder" width="22" height="22" color="#23c4f1" />
-            </div>
-            <div class="settings" @click.stop>
-              <Icon icon="fluent-color:clipboard-24" width="22" height="22" @click.stop="copyAccount(item.email)"/>
-              <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"
-                    v-if="showNullSetting(item)"/>
-              <el-dropdown v-else>
-                <Icon icon="fluent:settings-24-filled" width="21" height="21" color="#909399"/>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item v-if="hasPerm('email:send')" @click="openSetName(item)">{{ $t('rename') }}</el-dropdown-item>
-                    <el-dropdown-item v-if="item.accountId !== userStore.user.account.accountId" @click="setAsTop(item, index)">{{ $t('pin') }}</el-dropdown-item>
-                    <el-dropdown-item v-if="item.accountId !== userStore.user.account.accountId && hasPerm('account:delete')"
-                                      @click="remove(item)">{{ $t('delete') }}
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
-          </div>
-        </el-card>
-
-        <!-- Initial Loading Skeleton -->
-        <template v-if="loading">
-          <el-skeleton v-for="i in skeletonRows" :key="i" animated>
-            <template #template>
-              <el-card class="item">
-                <el-skeleton-item variant="p" style="width: 70%; height: 20px; margin-bottom: 25px"/>
-                <div style="display: flex; justify-content: space-between">
-                  <el-skeleton-item variant="text" style="width: 20px"/>
-                  <el-skeleton-item variant="text" style="width: 20px"/>
-                </div>
-              </el-card>
-            </template>
-          </el-skeleton>
-        </template>
-
-        <!-- Follow Loading Skeleton -->
-        <template v-if="accounts.length > 0 && !noLoading">
-          <el-skeleton animated>
-            <template #template>
-              <el-card class="item">
-                <el-skeleton-item variant="p" style="width: 70%; height: 20px; margin-bottom: 20px"/>
-                <div style="display: flex; justify-content: space-between">
-                  <el-skeleton-item variant="text" style="width: 20px"/>
-                  <el-skeleton-item variant="text" style="width: 20px"/>
-                </div>
-              </el-card>
-            </template>
-          </el-skeleton>
-        </template>
-
-        <div class="noLoading" v-if="noLoading && accounts.length > 0">
-          <div>{{ $t('noMoreData') }}</div>
+    <el-scrollbar class="scrollbar">
+      <div class="global-folders">
+        <div
+            class="global-row"
+            :class="globalFolderActive('email')"
+            @click="openGlobalInbox"
+        >
+          <Icon icon="hugeicons:mailbox-01" width="19" height="19"/>
+          <span>收件箱</span>
+          <span v-if="globalInboxUnread > 0" class="folder-count">{{ formatUnread(globalInboxUnread) }}</span>
         </div>
-        <div class="empty" v-if="noLoading && accounts.length === 0">
-          <el-empty :description="$t('noMessagesFound')"/>
+        <div
+            class="global-row"
+            :class="globalFolderActive('spam')"
+            @click="openSpam"
+        >
+          <Icon icon="mdi:email-alert-outline" width="19" height="19"/>
+          <span>垃圾邮箱</span>
+          <span v-if="spamUnread > 0" class="folder-count">{{ formatUnread(spamUnread) }}</span>
         </div>
       </div>
 
-    </el-scrollbar>
-    <el-dialog v-model="showAdd" :title="$t('addAccount')">
-      <div class="container">
-        <el-input v-model="addForm.email" ref="addRef" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
-          <template #append>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  v-model="addForm.suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div>
-                <span>{{ addForm.suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-              </div>
-            </div>
-          </template>
-        </el-input>
-        <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
-        >{{ $t('add') }}
-        </el-button>
-      </div>
       <div
-          class="add-email-turnstile"
-          :class="verifyShow ? 'turnstile-show' : 'turnstile-hide'"
-          :data-sitekey="settingStore.settings.siteKey"
-          data-callback="onTurnstileSuccess"
-          data-error-callback="onTurnstileError"
+          v-for="item in domainAccounts"
+          :key="item.domain"
+          class="domain-group"
+          :class="domainActive(item.domain)"
       >
-        <span style="font-size: 12px;color: #F56C6C" v-if="botJsError">{{ $t('verifyModuleFailed') }}</span>
+        <div class="domain-head" @click="selectFolder(item, 'email')">
+          <Icon icon="mingcute:down-small-fill" width="18" height="18"/>
+          <span class="domain-name">{{ item.label }}</span>
+          <span v-if="item.unreadCount > 0" class="domain-badge">{{ formatUnread(item.unreadCount) }}</span>
+        </div>
+
+        <div class="folder-list">
+          <div class="folder-row" :class="folderActive(item.domain, 'email')" @click="selectFolder(item, 'email')">
+            <Icon icon="fluent:mail-inbox-20-regular" width="19" height="19"/>
+            <span>收件箱</span>
+            <span v-if="item.unreadCount > 0" class="folder-count">{{ formatUnread(item.unreadCount) }}</span>
+          </div>
+          <div
+              v-if="hasPerm('user:query')"
+              class="folder-row"
+              :class="folderActive(item.domain, 'sub-account')"
+              @click="selectFolder(item, 'sub-account')"
+          >
+            <Icon icon="fluent:mail-inbox-add-20-regular" width="19" height="19"/>
+            <span>子邮箱管理</span>
+          </div>
+        </div>
+
+        <div class="domain-tools">
+          <button type="button" title="复制域名" @click.stop="copyDomain(item.domain)">
+            <Icon icon="fluent:copy-20-regular" width="17" height="17"/>
+          </button>
+          <button
+              v-if="hasPerm('user:query')"
+              type="button"
+              title="管理子邮箱"
+              @click.stop="selectFolder(item, 'sub-account')"
+          >
+            <Icon icon="fluent:settings-24-regular" width="17" height="17"/>
+          </button>
+        </div>
       </div>
-    </el-dialog>
-    <el-dialog v-model="setNameShow" :title="$t('changeUserName')">
-      <div class="container">
-        <el-input v-model="accountName" type="text" :placeholder="$t('username')" autocomplete="off">
-        </el-input>
-        <el-button class="btn" type="primary" @click="setName" :loading="setNameLoading"
-        >{{ $t('save') }}
-        </el-button>
+
+      <div class="empty" v-if="domainAccounts.length === 0">
+        <el-empty description="暂无域名"/>
       </div>
-    </el-dialog>
+    </el-scrollbar>
   </div>
 </template>
+
 <script setup>
-import {Icon} from "@iconify/vue";
-import {computed, nextTick, reactive, ref, watch} from "vue";
-import {
-  accountList,
-  accountAdd,
-  accountDelete,
-  accountSetName,
-  accountSetAllReceive,
-  accountSetAsTop
-} from "@/request/account.js";
-import {sleep} from "@/utils/time-utils.js"
-import {isEmail} from "@/utils/verify-utils.js";
-import {useSettingStore} from "@/store/setting.js";
-import {useAccountStore} from "@/store/account.js";
-import {useEmailStore} from "@/store/email.js";
-import {useUserStore} from "@/store/user.js";
-import {hasPerm} from "@/perm/perm.js"
-import {useI18n} from "vue-i18n";
-import {AccountAllReceiveEnum} from "@/enums/account-enum.js";
+import {Icon} from '@iconify/vue'
+import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {useRoute} from 'vue-router'
+import router from '@/router/index.js'
+import {useSettingStore} from '@/store/setting.js'
+import {useAccountStore} from '@/store/account.js'
+import {useEmailStore} from '@/store/email.js'
+import {useUserStore} from '@/store/user.js'
+import {hasPerm} from '@/perm/perm.js'
+import {emailDomainStats} from '@/request/email.js'
 
-const {t} = useI18n();
-const userStore = useUserStore();
-const accountStore = useAccountStore();
-const settingStore = useSettingStore();
-const emailStore = useEmailStore();
-const showAdd = ref(false)
-const addLoading = ref(false);
-const domainList = computed(() => settingStore.domainList)
-const accounts = reactive([])
-const noLoading = ref(false)
-const loading = ref(false)
-const followLoading = ref(false);
-const verifyShow = ref(false)
-const setNameShow = ref(false)
-const setNameLoading = ref(false)
-const accountName = ref(null)
-const addRef = ref({})
-const scrollbarRef = ref({})
-let account = null
-let turnstileId = null
-const botJsError = ref(false)
-let verifyToken = ''
-let verifyErrorCount = 0
-let first = true
-const addForm = reactive({
-  email: '',
-  suffix: settingStore.domainList[0]
-})
-let skeletonRows = 10
-const queryParams = {
-  size: 30
-}
+const route = useRoute()
+const userStore = useUserStore()
+const accountStore = useAccountStore()
+const settingStore = useSettingStore()
+const emailStore = useEmailStore()
+const domainStats = ref({})
+const globalInboxUnread = ref(0)
+const spamUnread = ref(0)
 
-const mySelect = ref()
-
-if (hasPerm('account:query')) {
-  getAccountList()
-}
-
-watch(() => accountStore.changeUserAccountName, () => {
-  accounts[0].name = accountStore.changeUserAccountName
-})
-
-watch(() => settingStore.domainList, (list) => {
-  if (!addForm.suffix && list.length > 0) {
-    addForm.suffix = list[0]
+const domainAccounts = computed(() => (settingStore.domainList || []).map(domain => {
+  const clean = cleanDomain(domain)
+  return {
+    domain: clean,
+    label: `@${clean}`,
+    unreadCount: domainStats.value[clean] || 0,
+    accountId: userStore.user?.account?.accountId || 0,
+    allReceive: 1,
+    domainMode: true
   }
-}, {immediate: true})
+}).filter(item => item.domain))
 
+watch(
+    () => [(settingStore.domainList || []).join(','), userStore.user?.account?.accountId],
+    () => {
+      ensureMailboxState(false)
+      fetchDomainStats()
+    },
+    {immediate: true}
+)
 
-const openSelect = () => {
-  mySelect.value.toggleMenu()
-}
-
-window.onTurnstileError = (e) => {
-  if (verifyErrorCount >= 4) {
-    return
-  }
-  verifyErrorCount++
-  console.warn('人机验加载失败', e)
-  setTimeout(() => {
-    nextTick(() => {
-      if (!turnstileId) {
-        turnstileId = window.turnstile.render('.add-email-turnstile')
-      } else {
-        window.turnstile.reset(turnstileId);
+watch(
+    () => [route.name, route.query.domain, domainAccounts.value.map(item => item.domain).join(',')],
+    () => {
+      if (route.name !== 'sub-account' || !route.query.domain) return
+      const domain = cleanDomain(route.query.domain)
+      const item = domainAccounts.value.find(row => row.domain === domain)
+      if (item) {
+        changeDomain(item, false)
       }
-    })
-  }, 1500)
-};
+    },
+    {immediate: true}
+)
 
-window.onTurnstileSuccess = (token) => {
-  verifyToken = token;
-};
+onMounted(() => {
+  window.addEventListener('mail-unread-changed', fetchDomainStats)
+})
 
-function getSkeletonRows() {
-  if (accounts.length > 20) return skeletonRows = 20
-  if (accounts.length === 0) return skeletonRows = 1
-  skeletonRows = accounts.length
-}
+onBeforeUnmount(() => {
+  window.removeEventListener('mail-unread-changed', fetchDomainStats)
+})
 
-function setName() {
+function selectFolder(item, name) {
+  if (!item?.domain) return
+  changeDomain(item, name === 'email')
 
-  let name = accountName.value
-
-  if (name === account.name) {
-    setNameShow.value = false
+  if (name === 'sub-account') {
+    router.push({name: 'sub-account', query: {domain: item.domain}})
     return
   }
 
-  if (!name) {
-    ElMessage({
-      message: t('emptyUserNameMsg'),
-      type: 'error',
-      plain: true,
-    })
-    return;
+  router.push({name})
+}
+
+function openGlobalInbox() {
+  setGlobalMailbox(true)
+  router.push({name: 'email'})
+}
+
+function openSpam() {
+  setGlobalMailbox(true, '垃圾邮箱')
+  router.push({name: 'spam'})
+}
+
+function ensureMailboxState(refreshList = true) {
+  if (!userStore.user?.account?.accountId) return
+
+  if (!accountStore.currentAccountId) {
+    setGlobalMailbox(refreshList)
+    return
   }
 
-  setNameLoading.value = true
-  accountSetName(account.accountId, name).then(() => {
-    account.name = name
-    setNameShow.value = false
-
-    if (account.accountId === userStore.user.account.accountId) {
-      userStore.user.name = name
-    }
-
-    ElMessage({
-      message: t('saveSuccessMsg'),
-      type: "success",
-      plain: true
-    })
-  }).finally(() => {
-    setNameLoading.value = false
-  })
+  if (accountStore.currentDomain && !domainAccounts.value.some(item => item.domain === accountStore.currentDomain)) {
+    setGlobalMailbox(refreshList)
+  }
 }
 
-function openSetName(accountItem) {
-  accountName.value = accountItem.name
-  account = accountItem
-  setNameShow.value = true
+function setGlobalMailbox(refreshList = true, label = '收件箱') {
+  const baseAccount = userStore.user?.account || {}
+  const accountId = baseAccount.accountId || accountStore.currentAccountId
+  if (!accountId) return
+
+  const changed = accountStore.currentDomain !== '' || accountStore.currentAccountId !== accountId || accountStore.currentAccount?.allReceive !== 1
+  accountStore.currentDomain = ''
+  accountStore.currentAccountId = accountId
+  accountStore.currentAccount = {
+    ...baseAccount,
+    accountId,
+    email: label,
+    domain: '',
+    allReceive: 1,
+    domainMode: false
+  }
+
+  if (refreshList && changed) {
+    emailStore.emailScroll?.refreshList?.()
+    emailStore.spamScroll?.refreshList?.()
+  }
 }
 
-function setAllReceive(account) {
-  let allReceiveAccount = accounts.find(account => account.allReceive === AccountAllReceiveEnum.ENABLED);
-  if (allReceiveAccount && allReceiveAccount.accountId !== account.accountId) allReceiveAccount.allReceive = AccountAllReceiveEnum.DISABLED;
-  account.allReceive = account.allReceive === AccountAllReceiveEnum.DISABLED ? AccountAllReceiveEnum.ENABLED : AccountAllReceiveEnum.DISABLED;
-  accountSetAllReceive(account.accountId).catch(() => {
-    account.allReceive = account.allReceive === AccountAllReceiveEnum.DISABLED ? AccountAllReceiveEnum.ENABLED : AccountAllReceiveEnum.DISABLED;
-    if (allReceiveAccount) allReceiveAccount.allReceive = AccountAllReceiveEnum.ENABLED;
-  }).then(() => {
-    if (account.allReceive === AccountAllReceiveEnum.ENABLED) {
-      ElMessage({
-        message: t('setSuccess'),
-        type: 'success',
-        plain: true,
-      })
-    }
-    changeAccount(account);
-    emailStore.emailScroll?.refreshList();
-    emailStore.sendScroll?.refreshList();
-  })
-}
+function changeDomain(item, refreshList = true) {
+  if (!item?.domain || !item.accountId) return
 
+  accountStore.currentDomain = item.domain
+  accountStore.currentAccountId = item.accountId
+  accountStore.currentAccount = {
+    ...(userStore.user.account || {}),
+    accountId: item.accountId,
+    email: item.label,
+    domain: item.domain,
+    allReceive: 1,
+    domainMode: true
+  }
 
-function showNullSetting(item) {
-  return !hasPerm('email:send') && !(item.accountId !== userStore.user.account.accountId && hasPerm('account:delete'))
-}
-
-function itemBg(accountId) {
-  return accountStore.currentAccountId === accountId ? 'item-choose' : ''
-}
-
-
-
-function remove(account) {
-  ElMessageBox.confirm(t('delConfirm', {msg: account.email}), {
-    confirmButtonText: t('confirm'),
-    cancelButtonText: t('cancel'),
-    type: 'warning'
-  }).then(() => {
-    accountDelete(account.accountId).then(() => {
-      const index = accounts.findIndex(item => item.accountId === account.accountId);
-      accounts.splice(index, 1);
-      if (accounts.length < queryParams.size) {
-        getAccountList()
-      }
-      ElMessage({
-        message: t('delSuccessMsg'),
-        type: 'success',
-        plain: true,
-      })
-    })
-  });
+  if (refreshList) {
+    emailStore.emailScroll?.refreshList?.()
+  }
 }
 
 function refresh() {
-  if (loading.value) {
-    return
-  }
-  loading.value = false
-  followLoading.value = false
-  noLoading.value = false
-  queryParams.accountId = 0
-  queryParams.lastSort = null
-  getSkeletonRows();
-  scrollbarRef.value.setScrollTop(0)
-  accounts.splice(0, accounts.length)
-  getAccountList()
+  const current = domainAccounts.value.find(item => item.domain === accountStore.currentDomain) || domainAccounts.value[0]
+  fetchDomainStats()
+  changeDomain(current)
 }
 
-function changeAccount(account) {
-  accountStore.currentAccountId = account.accountId
-  accountStore.currentAccount = account
-}
-
-function add() {
-  addForm.suffix = addForm.suffix || settingStore.domainList[0]
-  showAdd.value = true
-  setTimeout(() => {
-    addRef.value.focus()
-  }, 100)
-}
-
-function setAsTop(account, index) {
-  accountSetAsTop(account.accountId).then(() => {
-    ElMessage({
-      message: t('setSuccess'),
-      type: 'success',
-      plain: true,
-    })
-
-    const [item] = accounts.splice(index, 1);
-    accounts.splice(1, 0, item);
-
-  });
-}
-
-async function copyAccount(account) {
+async function copyDomain(domain) {
   try {
-    await navigator.clipboard.writeText(account);
-    ElMessage({
-      message: t('copySuccessMsg'),
-      type: 'success',
-      plain: true,
-    })
+    await navigator.clipboard.writeText(domain)
+    ElMessage({message: '复制成功', type: 'success', plain: true})
   } catch (err) {
-    console.error(`${t('copyFailMsg')}:`, err);
-    ElMessage({
-      message: t('copyFailMsg'),
-      type: 'error',
-      plain: true,
-    })
+    console.error('复制失败:', err)
+    ElMessage({message: '复制失败', type: 'error', plain: true})
   }
 }
 
-function getAccountList() {
+function openSubAccounts(domain = '') {
+  const currentDomain = domain || accountStore.currentDomain || domainAccounts.value[0]?.domain || ''
+  router.push({name: 'sub-account', query: currentDomain ? {domain: currentDomain} : {}})
+}
 
-  if (loading.value || followLoading.value || noLoading.value) return;
-
-  if (accounts.length === 0) {
-    loading.value = true
-  } else {
-    followLoading.value = true
-  }
-
-  let start = Date.now();
-
-  const accountId = accounts.length > 0 ? accounts.at(-1).accountId : 0;
-  const lastSort = accounts.length > 0 ? accounts.at(-1).sort : null;
-
-  accountList(accountId, queryParams.size, lastSort).then(async list => {
-
-    let end = Date.now();
-    let duration = end - start;
-    if (duration < 300) {
-      await sleep(300 - duration)
-    }
-
-    if (list.length < queryParams.size) {
-      noLoading.value = true
-    }
-    if (accounts.length === 0) {
-      accountStore.currentAccount = list[0]
-    }
-
-    accounts.push(...list)
-
-    loading.value = false
-    followLoading.value = false
-    first = false
-  }).catch(() => {
-    loading.value = false
-    followLoading.value = false
+function fetchDomainStats() {
+  if (!userStore.user?.account?.accountId) return
+  emailDomainStats().then(data => {
+    const list = Array.isArray(data) ? data : (data?.domains || [])
+    const fallbackGlobalUnread = list.reduce((total, item) => total + Number(item.unreadCount || 0), 0)
+    globalInboxUnread.value = Number(data?.globalInboxUnread ?? fallbackGlobalUnread)
+    spamUnread.value = Number(data?.spamUnread || 0)
+    domainStats.value = Object.fromEntries(list.map(item => [
+      cleanDomain(item.domain),
+      Number(item.unreadCount || 0)
+    ]))
+  }).catch(err => {
+    console.error('获取域名未读统计失败:', err)
   })
 }
 
+function domainActive(domain) {
+  return accountStore.currentDomain === domain ? 'domain-active' : ''
+}
 
-function submit() {
+function folderActive(domain, name) {
+  return accountStore.currentDomain === domain && route.name === name ? 'folder-active' : ''
+}
 
-  if (!addForm.email) {
-    ElMessage({
-      message: t('emptyEmailMsg'),
-      type: "error",
-      plain: true
-    })
-    return
+function globalFolderActive(name) {
+  if (name === 'email') {
+    return route.name === 'email' && !accountStore.currentDomain ? 'folder-active' : ''
   }
+  return route.name === name ? 'folder-active' : ''
+}
 
-  if (addForm.email.length < settingStore.settings.minEmailPrefix) {
-    ElMessage({
-      message: t('minEmailPrefix', {msg: settingStore.settings.minEmailPrefix}),
-      type: 'error',
-      plain: true,
-    })
-    return
-  }
+function formatUnread(count) {
+  return count > 99 ? '99+' : count
+}
 
-  if (!isEmail(addForm.email + addForm.suffix)) {
-    ElMessage({
-      message: t('notEmailMsg'),
-      type: "error",
-      plain: true
-    })
-    return
-  }
-
-  if (!verifyToken && (settingStore.settings.addEmailVerify === 0 || (settingStore.settings.addEmailVerify === 2 && settingStore.settings.addVerifyOpen))) {
-    if (!verifyShow.value) {
-      verifyShow.value = true
-      nextTick(() => {
-        if (!turnstileId) {
-          try {
-            turnstileId = window.turnstile.render('.add-email-turnstile')
-          } catch (e) {
-            botJsError.value = true
-            console.log('人机验证js加载失败')
-          }
-        } else {
-          window.turnstile.reset('.add-email-turnstile')
-        }
-      })
-    } else if (!botJsError.value) {
-      ElMessage({
-        message: t('botVerifyMsg'),
-        type: "error",
-        plain: true
-      })
-    }
-    return;
-  }
-
-  addLoading.value = true
-  accountAdd(addForm.email + addForm.suffix, verifyToken).then(account => {
-    addLoading.value = false
-    showAdd.value = false
-    addForm.email = ''
-    accounts.push(account)
-    verifyToken = ''
-    settingStore.settings.addVerifyOpen = account.addVerifyOpen
-    ElMessage({
-      message: t('addSuccessMsg'),
-      type: "success",
-      plain: true
-    })
-    verifyShow.value = false
-    userStore.refreshUserInfo()
-  }).catch(res => {
-    if (res.code === 400) {
-      verifyToken = ''
-      if (turnstileId) {
-        window.turnstile.reset(turnstileId)
-      } else {
-        nextTick(() => {
-          turnstileId = window.turnstile.render('.add-email-turnstile')
-        })
-      }
-      verifyShow.value = true
-    }
-    addLoading.value = false
-  })
+function cleanDomain(domain) {
+  return String(domain || '').replace(/^@/, '').trim().toLowerCase()
 }
 </script>
-<style>
-path[fill="#ffdda1"] {
-  fill: #ffdd7d;
-}
-</style>
+
 <style scoped lang="scss">
 .account-box {
-
   border-right: 1px solid var(--el-border-color) !important;
-  background-color: var(--el-bg-color);
+  background: linear-gradient(180deg, var(--el-bg-color), var(--el-fill-color-lighter));
   height: 100%;
   overflow: hidden;
 
   .head-opt {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     height: 38px;
     box-shadow: var(--header-actions-border);
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 12px;
+    padding-right: 12px;
+
+    .head-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--el-text-color-regular);
+    }
+
+    .head-icons {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
 
     .icon {
       cursor: pointer;
-    }
-
-    .refresh {
-      margin-left: 10px;
-    }
-
-    .add {
-      margin-left: 2px;
-    }
-
-    .head-opt:not(.add) .refresh {
-      margin-left: 5px;
     }
   }
 
@@ -552,126 +326,139 @@ path[fill="#ffdda1"] {
     width: 100%;
     height: calc(100% - 38px);
     overflow: auto;
+
     @media (max-width: 767px) {
       height: calc(100% - 98px);
     }
-
-    .empty {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100%;
-    }
-
-    .noLoading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 10px 0;
-      color: var(--secondary-text-color);
-    }
-  }
-
-  .btn {
-    width: 100%;
-    margin-top: 15px;
-  }
-
-  .item {
-    background-color: var(--el-bg-color);
-    border-radius: 8px;
-    padding: 12px 10px;
-    margin-bottom: 10px;
-    margin-left: 10px;
-    margin-right: 10px;
-    cursor: pointer;
-
-    .account {
-      font-weight: 600;
-      margin-bottom: 20px;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    .opt {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      color: #888;
-
-      .settings {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .send-email {
-        display: flex;
-        align-items: center;
-      }
-    }
-
-    :deep(.el-card__body) {
-      padding: 0;
-    }
-  }
-
-  .item:first-child {
-    margin-top: 10px;
-  }
-
-  .item-choose {
-    background: var(--choose-account-background);
   }
 }
 
-
-.setting-icon {
+.domain-group {
   position: relative;
-  top: 6px;
+  margin: 8px 8px 10px;
+  padding: 6px 0 8px;
+  border-radius: 10px;
+  color: var(--el-text-color-regular);
 }
 
-:deep(.el-input-group__append) {
-  padding: 0 !important;
-  padding-left: 8px !important;
-  background: var(--el-bg-color);
+.global-folders {
+  margin: 8px;
+  padding: 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--el-color-primary) 6%, transparent);
 }
 
-:deep(.el-dialog) {
-  width: 400px !important;
-  @media (max-width: 440px) {
-    width: calc(100% - 40px) !important;
-    margin-right: 20px !important;
-    margin-left: 20px !important;
+.global-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.global-row + .global-row {
+  margin-top: 3px;
+}
+
+.domain-active {
+  background: color-mix(in srgb, var(--el-color-primary) 9%, transparent);
+}
+
+.domain-head {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.domain-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.domain-badge,
+.folder-count {
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--el-color-primary);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.folder-list {
+  display: grid;
+  gap: 2px;
+  padding: 2px 5px 0 24px;
+}
+
+.folder-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+
+  span:nth-child(2) {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 }
 
-.select {
-  position: absolute;
-  right: 30px;
-  width: 100px;
-  opacity: 0;
-  pointer-events: none;
+.global-row:hover,
+.folder-row:hover,
+.folder-active {
+  background: var(--choose-account-background);
+  color: var(--el-color-primary);
+  font-weight: 700;
 }
 
-:deep(.el-pagination .el-select) {
-  width: 100px;
-  background: var(--el-bg-color);
+.domain-tools {
+  display: flex;
+  gap: 4px;
+  padding: 4px 10px 0 52px;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 24px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--el-text-color-secondary);
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: var(--el-fill-color-light);
+    color: var(--el-color-primary);
+  }
 }
 
-.add-email-turnstile {
-  margin-top: 15px;
+.empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
 }
-
-.turnstile-show {
-  opacity: 1;
-}
-
-.turnstile-hide {
-  opacity: 0;
-  pointer-events: none;
-  position: fixed;
-}
-
 </style>

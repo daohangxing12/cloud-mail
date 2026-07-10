@@ -14,9 +14,19 @@ app.get('/email/latest', async (c) => {
 	return c.json(result.ok(list));
 });
 
+app.get('/email/domainStats', async (c) => {
+	const list = await emailService.domainStats(c, userContext.getUserId(c));
+	return c.json(result.ok(list));
+});
+
 app.delete('/email/delete', async (c) => {
 	await emailService.delete(c, c.req.query(), userContext.getUserId(c));
 	return c.json(result.ok());
+});
+
+app.put('/email/blockSender', async (c) => {
+	const data = await emailService.blockSender(c, await c.req.json(), userContext.getUserId(c));
+	return c.json(result.ok(data));
 });
 
 app.get('/email/attList', async (c) => {
