@@ -7,7 +7,7 @@ keep_vars = true
 enabled = true
 
 [[routes]]
-pattern = "email.ntmcn.com"
+pattern = "mail.ntmcn.com"
 custom_domain = true
 
 [[routes]]

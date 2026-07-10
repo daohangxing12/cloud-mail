@@ -13,7 +13,7 @@ export default {
 		const host = url.hostname.toLowerCase()
 
 		if (isHiddenFrontendHost(host) && isFrontendPath(url.pathname)) {
-			return Response.redirect(`https://email.ntmcn.com${url.pathname}${url.search}`, 302);
+			return Response.redirect(`https://mail.ntmcn.com${url.pathname}${url.search}`, 302);
 		}
 
 		if (url.pathname.startsWith('/api/')) {
