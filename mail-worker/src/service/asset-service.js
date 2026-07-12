@@ -1,3 +1,9 @@
+/*
+ * STABLE GUARD:
+ * 资产中心用于同步邮箱、TikTok 用户名、粉丝、播放量、登录状态、中视频识别。
+ * 禁止随意删除字段、统计、列表筛选或本地软件同步兼容逻辑。
+ * 修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+ */
 import KvConst from '../const/kv-const';
 import { isDel } from '../const/entity-const';
 import creatorRewardsService from './creator-rewards-service';
@@ -80,8 +86,8 @@ const assetService = {
 		}
 
 		if (keyword) {
-			where.push('(email COLLATE NOCASE LIKE ? OR name COLLATE NOCASE LIKE ? OR tiktok_username COLLATE NOCASE LIKE ? OR bit_browser_id COLLATE NOCASE LIKE ?)');
-			binds.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+			where.push('(email COLLATE NOCASE LIKE ? OR tiktok_username COLLATE NOCASE LIKE ? OR creator_rewards_username COLLATE NOCASE LIKE ?)');
+			binds.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
 		}
 
 		if (this.truthy(params.assetOnly)) {

@@ -1,10 +1,17 @@
-<template>
+﻿<!--
+  STABLE GUARD:
+  邮件详情页/嵌入详情是三栏收件箱右侧阅读区的稳定组成部分。
+  禁止改回只能弹窗或跳页查看，禁止破坏精准拉黑入口。
+--><template>
   <div class="box" v-if="email && email.emailId">
     <div class="header-actions">
       <Icon v-if="!props.embedded" class="icon" icon="material-symbols-light:arrow-back-ios-new" width="20" height="20" @click="handleBack"/>
       <Icon v-perm="'email:delete'" class="icon" icon="uiw:delete" width="16" height="16" @click="handleDelete"/>
-      <el-tooltip v-if="email.type === 0 && email.isSpam !== 1 && email.sendEmail" content="拉黑发件人，邮件进入垃圾邮箱" effect="dark">
+      <el-tooltip v-if="email.type === 0 && email.isSpam !== 1 && email.sendEmail" content="鎷夐粦鍙戜欢浜猴紝閭欢杩涘叆鍨冨溇閭" effect="dark">
         <Icon v-perm="'setting:set'" class="icon" icon="mdi:email-lock-outline" width="21" height="21" @click="handleBlockSender"/>
+      </el-tooltip>
+      <el-tooltip v-if="canCreateManagedMailbox" content="鍒涘缓璧勪骇/瀛愰偖绠卞苟鍑嗗鎺ョ爜 Token" effect="dark">
+        <Icon v-perm="'user:add'" class="icon managed-mailbox-icon" icon="fluent:mail-add-20-regular" width="22" height="22" @click="handleEnsureManagedMailbox"/>
       </el-tooltip>
       <span class="star" v-if="emailStore.contentData.showStar">
         <Icon class="icon" @click="changeStar" v-if="email.isStar" icon="fluent-color:star-16" width="20" height="20"/>
@@ -76,12 +83,12 @@
     />
   </div>
   <div class="empty-content" v-else>
-    <el-empty description="请选择一封邮件"/>
+    <el-empty description="璇烽€夋嫨涓€灏侀偖浠?/>
   </div>
 </template>
 <script setup>
 import ShadowHtml from '@/components/shadow-html/index.vue'
-import {reactive, ref, watch, onMounted, onUnmounted} from "vue";
+import {computed, reactive, ref, watch, onUnmounted} from "vue";
 import {useRouter} from 'vue-router'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {emailBlockSender, emailDelete, emailRead} from "@/request/email.js";
@@ -95,6 +102,7 @@ import {cvtR2Url,toOssDomain} from "@/utils/convert.js";
 import {getIconByName} from "@/utils/icon-utils.js";
 import {useSettingStore} from "@/store/setting.js";
 import {allEmailDelete} from "@/request/all-email.js";
+import {subAccountEnsureFromEmail} from "@/request/sub-account.js";
 import {useUiStore} from "@/store/ui.js";
 import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
@@ -104,7 +112,34 @@ const settingStore = useSettingStore();
 const accountStore = useAccountStore();
 const emailStore = useEmailStore();
 const router = useRouter()
-const email = emailStore.contentData.email
+const emptyEmail = {
+  emailId: 0,
+  subject: '',
+  name: '',
+  sendEmail: '',
+  recipient: '[]',
+  createTime: '',
+  content: '',
+  text: '',
+  attList: [],
+  isStar: 0,
+  unread: EmailUnreadEnum.READ
+}
+const email = computed(() => {
+  const mail = emailStore.contentData.email
+  if (!mail) return emptyEmail
+  if (!Array.isArray(mail.attList)) mail.attList = []
+  if (!mail.recipient) mail.recipient = '[]'
+  return mail
+})
+const managedDomains = ['feilong168.com', 'baofa.de', 'ntmcn.com']
+const targetReceiveEmail = computed(() => pickReceiveEmail(email.value))
+const canCreateManagedMailbox = computed(() => {
+  const value = targetReceiveEmail.value
+  if (!value || email.value.type !== 0) return false
+  const domain = value.split('@').pop()?.toLowerCase()
+  return managedDomains.includes(domain)
+})
 const showPreview = ref(false)
 const srcList = reactive([])
 
@@ -121,14 +156,10 @@ watch(() => accountStore.currentAccountId, () => {
   handleBack()
 })
 
-onMounted(() => {
-  if (!email?.emailId) return
-  if (emailStore.contentData.showUnread && email.unread === EmailUnreadEnum.UNREAD) {
-    email.unread = EmailUnreadEnum.READ;
-    emailRead([email.emailId]).finally(() => {
-      window.dispatchEvent(new CustomEvent('mail-unread-changed'))
-    });
-  }
+watch(() => email.value.emailId, () => {
+  markCurrentEmailRead()
+}, {
+  immediate: true
 })
 
 onUnmounted(() => {
@@ -136,15 +167,19 @@ onUnmounted(() => {
 })
 
 function openReply() {
-  uiStore.writerRef.openReply(email)
+  uiStore.writerRef.openReply(currentEmail())
 }
 
 function openForward() {
-  uiStore.writerRef.openForward(email)
+  uiStore.writerRef.openForward(currentEmail())
 }
 
 function toMessage(message) {
-  return  message ? JSON.parse(message).message : '';
+  try {
+    return  message ? JSON.parse(message).message : '';
+  } catch (e) {
+    return message || ''
+  }
 }
 
 function formatImage(content) {
@@ -166,32 +201,59 @@ function isImage(filename) {
 }
 
 function formateReceive(recipient) {
-  recipient = JSON.parse(recipient)
-  return recipient.map(item => item.address).join(', ')
+  if (!recipient) return ''
+  try {
+    const list = JSON.parse(recipient)
+    return Array.isArray(list) ? list.map(item => item.address).join(', ') : ''
+  } catch (e) {
+    return ''
+  }
+}
+
+function pickReceiveEmail(mail) {
+  const direct = normalizeEmail(mail?.toEmail)
+  if (direct) return direct
+  try {
+    const list = JSON.parse(mail?.recipient || '[]')
+    if (Array.isArray(list)) {
+      const item = list.find(row => normalizeEmail(row?.address))
+      if (item) return normalizeEmail(item.address)
+    }
+  } catch (e) {
+    // ignore malformed recipient data
+  }
+  return ''
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase()
 }
 
 function changeStar() {
-  if (email.isStar) {
-    email.isStar = 0;
-    starCancel(email.emailId).then(() => {
-      email.isStar = 0;
-      emailStore.cancelStarEmailId = email.emailId
+  const mail = currentEmail()
+  if (!mail.emailId) return
+
+  if (mail.isStar) {
+    mail.isStar = 0;
+    starCancel(mail.emailId).then(() => {
+      mail.isStar = 0;
+      emailStore.cancelStarEmailId = mail.emailId
       setTimeout(() => emailStore.cancelStarEmailId = 0)
-      emailStore.starScroll?.deleteEmail([email.emailId])
+      emailStore.starScroll?.deleteEmail([mail.emailId])
     }).catch((e) => {
       console.error(e)
-      email.isStar = 1;
+      mail.isStar = 1;
     })
   } else {
-    email.isStar = 1;
-    starAdd(email.emailId).then(() => {
-      email.isStar = 1;
-      emailStore.addStarEmailId = email.emailId
+    mail.isStar = 1;
+    starAdd(mail.emailId).then(() => {
+      mail.isStar = 1;
+      emailStore.addStarEmailId = mail.emailId
       setTimeout(() => emailStore.addStarEmailId = 0)
-      emailStore.starScroll?.addItem(email)
+      emailStore.starScroll?.addItem(mail)
     }).catch((e) => {
       console.error(e)
-      email.isStar = 0;
+      mail.isStar = 0;
     })
   }
 }
@@ -205,18 +267,21 @@ const handleBack = () => {
 }
 
 const handleBlockSender = () => {
-  ElMessageBox.confirm(`确认拉黑 ${email.sendEmail}？以后这个发件人的邮件会进入垃圾邮箱。`, {
+  const mail = currentEmail()
+  if (!mail.emailId || !mail.sendEmail) return
+
+  ElMessageBox.confirm(`纭鎷夐粦 ${mail.sendEmail}锛熶互鍚庤繖涓彂浠朵汉鐨勯偖浠朵細杩涘叆鍨冨溇閭銆俙, {
     confirmButtonText: t('confirm'),
     cancelButtonText: t('cancel'),
     type: 'warning'
   }).then(() => {
-    emailBlockSender(email.emailId).then(() => {
+    emailBlockSender(mail.emailId).then(() => {
       ElMessage({
-        message: '已拉黑发件人，邮件已进入垃圾邮箱',
+        message: '宸叉媺榛戝彂浠朵汉锛岄偖浠跺凡杩涘叆鍨冨溇閭',
         type: 'success',
         plain: true,
       })
-      emailStore.deleteIds = [email.emailId]
+      emailStore.deleteIds = [mail.emailId]
       window.dispatchEvent(new CustomEvent('mail-unread-changed'))
       window.dispatchEvent(new CustomEvent('mail-insights-changed'))
       emit('close')
@@ -224,30 +289,62 @@ const handleBlockSender = () => {
   })
 }
 
+const handleEnsureManagedMailbox = () => {
+  const mail = currentEmail()
+  const targetEmail = targetReceiveEmail.value
+  if (!mail.emailId || !targetEmail) return
+
+  ElMessageBox.confirm(`纭鎶?${targetEmail} 鍒涘缓鍒拌祫浜?瀛愰偖绠辩鐞嗭紝骞跺噯澶囨帴鐮?Token锛焋, {
+    confirmButtonText: t('confirm'),
+    cancelButtonText: t('cancel'),
+    type: 'warning'
+  }).then(() => {
+    subAccountEnsureFromEmail({
+      emailId: mail.emailId,
+      ensureToken: true
+    }).then(data => {
+      const actionText = {
+        created: '宸插垱寤?,
+        restored: '宸叉仮澶?,
+        existing: '宸插瓨鍦?
+      }[data.action] || '宸插鐞?
+      ElMessage({
+        message: `${actionText}锛?{data.email}${data.generatedToken ? '锛屽凡鐢熸垚鎺ョ爜 Token' : ''}`,
+        type: 'success',
+        plain: true
+      })
+      window.dispatchEvent(new CustomEvent('mail-insights-changed'))
+    })
+  })
+}
+
 const handleDelete = () => {
+  const mail = currentEmail()
+  if (!mail.emailId) return
+
   ElMessageBox.confirm(t('delEmailConfirm'), {
     confirmButtonText: t('confirm'),
     cancelButtonText: t('cancel'),
     type: 'warning'
   }).then(() => {
     if (emailStore.contentData.delType === 'logic') {
-      emailDelete(email.emailId).then(() => {
+      emailDelete(mail.emailId).then(() => {
         ElMessage({
           message: t('delSuccessMsg'),
           type: 'success',
           plain: true,
         })
-        emailStore.deleteIds = [email.emailId]
+        emailStore.deleteIds = [mail.emailId]
       })
     } else  {
 
-      allEmailDelete(email.emailId).then(() => {
+      allEmailDelete(mail.emailId).then(() => {
         ElMessage({
           message: t('delSuccessMsg'),
           type: 'success',
           plain: true,
         })
-        emailStore.deleteIds = [email.emailId]
+        emailStore.deleteIds = [mail.emailId]
       })
     }
 
@@ -256,6 +353,20 @@ const handleDelete = () => {
     } else {
       router.back()
     }
+  })
+}
+
+function currentEmail() {
+  return email.value || emptyEmail
+}
+
+function markCurrentEmailRead() {
+  const mail = currentEmail()
+  if (!mail.emailId || !emailStore.contentData.showUnread || mail.unread !== EmailUnreadEnum.UNREAD) return
+
+  mail.unread = EmailUnreadEnum.READ
+  emailRead([mail.emailId]).finally(() => {
+    window.dispatchEvent(new CustomEvent('mail-unread-changed'))
   })
 }
 </script>
@@ -288,6 +399,9 @@ const handleDelete = () => {
   }
   .icon {
     cursor: pointer;
+  }
+  .managed-mailbox-icon {
+    color: var(--el-color-primary);
   }
 }
 
@@ -462,8 +576,8 @@ const handleDelete = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--message-block-color); /* 半透明黑色蒙层 */
-  pointer-events: none; /* 不影响点击 */
+  background: var(--message-block-color); /* 鍗婇€忔槑榛戣壊钂欏眰 */
+  pointer-events: none; /* 涓嶅奖鍝嶇偣鍑?*/
 }
 
 .email-text {
@@ -479,3 +593,4 @@ const handleDelete = () => {
 
 
 </style>
+

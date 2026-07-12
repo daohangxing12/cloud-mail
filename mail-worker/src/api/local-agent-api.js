@@ -1,3 +1,9 @@
+/*
+ * STABLE GUARD:
+ * /api/local-agent/* 是本地 NTMCN 矩阵工具依赖的稳定接口。
+ * 禁止随意删除、改名、改认证方式或改返回结构；否则登录接码、资产同步会直接失败。
+ * 修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+ */
 import app from '../hono/hono';
 import result from '../model/result';
 import localAgentService from '../service/local-agent-service';

@@ -1,3 +1,9 @@
+/*
+ * STABLE GUARD:
+ * 子邮箱 API 是自动创建子邮箱、生成 Token、本地软件接码的核心入口。
+ * 禁止删除 ensure/token/scan/import 等稳定能力，禁止扩大允许域名范围。
+ * 修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+ */
 import app from '../hono/hono';
 import result from '../model/result';
 import subAccountService from '../service/sub-account-service';
@@ -19,6 +25,21 @@ app.post('/subAccount/import', async (c) => {
 
 app.post('/subAccount/ensureAssets', async (c) => {
 	const data = await subAccountService.ensureAssets(c, await c.req.json());
+	return c.json(result.ok(data));
+});
+
+app.post('/subAccount/ensureManaged', async (c) => {
+	const data = await subAccountService.ensureManagedEmail(c, await c.req.json());
+	return c.json(result.ok(data));
+});
+
+app.post('/subAccount/ensureFromEmail', async (c) => {
+	const data = await subAccountService.ensureFromEmail(c, await c.req.json());
+	return c.json(result.ok(data));
+});
+
+app.post('/subAccount/scanUnmanaged', async (c) => {
+	const data = await subAccountService.scanUnmanagedMailboxes(c, await c.req.json());
 	return c.json(result.ok(data));
 });
 

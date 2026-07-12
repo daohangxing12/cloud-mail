@@ -1,9 +1,16 @@
+<!--
+  STABLE GUARD:
+  子邮箱管理是本地矩阵工具接码、Token 创建、资产邮箱接管的核心页面。
+  禁止删除批量创建、Token、TikTok 用户名/资产关联等稳定功能。
+  修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+-->
 <template>
   <div class="sub-account-box">
     <div class="header-actions">
       <Icon class="icon" icon="ion:add-outline" width="23" height="23" title="新增子邮箱" @click="openAdd"/>
       <Icon class="icon" icon="fluent:mail-inbox-add-20-regular" width="22" height="22" title="批量导入" @click="openImport"/>
       <Icon class="icon" icon="mdi:database-sync-outline" width="21" height="21" title="从资产补建子邮箱" @click="ensureAssets"/>
+      <Icon class="icon" icon="fluent:mail-search-24-regular" width="22" height="22" title="扫描未建档邮箱" @click="openScan"/>
       <div class="search">
         <el-input v-model="params.email" clearable class="search-input" placeholder="搜索子邮箱" @keyup.enter="search" @clear="search"/>
       </div>
@@ -184,6 +191,35 @@
       </div>
     </el-dialog>
 
+    <el-dialog v-model="scanShow" title="扫描未建档邮箱" class="scan-dialog" width="760px">
+      <div class="scan-box">
+        <el-alert
+            type="info"
+            :closable="false"
+            title="只扫描 feilong168.com、baofa.de、ntmcn.com。先预览，不会自动创建。"
+        />
+        <div class="scan-actions">
+          <el-select v-model="scanForm.domain" class="scan-domain-select" placeholder="全部允许域名">
+            <el-option label="全部允许域名" value=""/>
+            <el-option v-for="item in managedDomainOptions" :key="item" :label="item" :value="item"/>
+          </el-select>
+          <el-button :loading="scanLoading" @click="scanUnmanaged(false)">扫描</el-button>
+          <el-button type="primary" :disabled="!scanResult.list.length" :loading="scanCreateLoading" @click="scanUnmanaged(true)">
+            创建全部
+          </el-button>
+        </div>
+        <div class="scan-summary" v-if="scanResult.total">
+          发现 {{ scanResult.total }} 个未建档邮箱
+        </div>
+        <el-table :data="scanResult.list" max-height="360" empty-text="暂无未建档邮箱">
+          <el-table-column prop="email" label="邮箱" min-width="250" show-overflow-tooltip/>
+          <el-table-column prop="domain" label="域名" width="140"/>
+          <el-table-column prop="mailCount" label="邮件数" width="90"/>
+          <el-table-column prop="latestEmailTime" label="最后收件时间" min-width="170"/>
+        </el-table>
+      </div>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -203,6 +239,7 @@ import {
   subAccountGetToken,
   subAccountImport,
   subAccountList,
+  subAccountScanUnmanaged,
   subAccountSetName,
   subAccountSetTiktok
 } from '@/request/sub-account.js'
@@ -225,9 +262,13 @@ const pageLayout = ref(window.innerWidth < 768 ? 'pager' : 'prev, pager, next, s
 
 const addShow = ref(false)
 const importShow = ref(false)
+const scanShow = ref(false)
 const addLoading = ref(false)
 const importLoading = ref(false)
+const scanLoading = ref(false)
+const scanCreateLoading = ref(false)
 const importResult = ref(null)
+const managedDomainOptions = ['feilong168.com', 'baofa.de', 'ntmcn.com']
 
 const params = reactive({
   email: '',
@@ -249,6 +290,19 @@ const importForm = reactive({
   text: '',
   suffix: '',
   userEmail: ''
+})
+
+const scanForm = reactive({
+  domain: ''
+})
+
+const scanResult = reactive({
+  list: [],
+  total: 0,
+  created: [],
+  restored: [],
+  existing: [],
+  failed: []
 })
 
 watch(domainOptions, (list) => {
@@ -397,6 +451,46 @@ function ensureAssets() {
       })
       getList(true)
     })
+  })
+}
+
+function openScan() {
+  scanShow.value = true
+  if (!scanResult.list.length) {
+    scanUnmanaged(false)
+  }
+}
+
+function resetScanResult(data = {}) {
+  scanResult.list = data.list || []
+  scanResult.total = data.total || 0
+  scanResult.created = data.created || []
+  scanResult.restored = data.restored || []
+  scanResult.existing = data.existing || []
+  scanResult.failed = data.failed || []
+}
+
+function scanUnmanaged(create = false) {
+  const loadingRef = create ? scanCreateLoading : scanLoading
+  loadingRef.value = true
+  subAccountScanUnmanaged({
+    domain: scanForm.domain || '',
+    limit: 1000,
+    create,
+    ensureToken: false
+  }).then(data => {
+    resetScanResult(data)
+    if (create) {
+      ElMessage({
+        message: `创建完成：新增 ${data.created.length}，恢复 ${data.restored.length}，已存在 ${data.existing.length}，失败 ${data.failed.length}`,
+        type: data.failed.length ? 'warning' : 'success',
+        plain: true
+      })
+      getList(true)
+      window.dispatchEvent(new CustomEvent('mail-insights-changed'))
+    }
+  }).finally(() => {
+    loadingRef.value = false
   })
 }
 
@@ -760,6 +854,27 @@ function isOwnerAccount(row) {
   gap: 8px;
 }
 
+.scan-box {
+  display: grid;
+  gap: 14px;
+}
+
+.scan-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.scan-domain-select {
+  width: 190px;
+}
+
+.scan-summary {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
 .loading {
   position: absolute;
   display: flex;
@@ -792,6 +907,10 @@ function isOwnerAccount(row) {
     margin-right: 20px !important;
     margin-left: 20px !important;
   }
+}
+
+:deep(.scan-dialog) {
+  width: min(760px, calc(100% - 40px)) !important;
 }
 
 :deep(.el-table__inner-wrapper:before) {

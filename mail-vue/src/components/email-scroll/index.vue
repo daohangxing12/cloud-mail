@@ -1,3 +1,9 @@
+<!--
+  STABLE GUARD:
+  邮件列表滚动/分页/展示组件服务于稳定版三栏收件箱。
+  禁止删除头像、摘要、列表选中态、滚动加载等稳定体验。
+  修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+-->
 <template>
   <div class="email-container">
     <div class="header-actions">
@@ -40,7 +46,9 @@
           <template #default="{ data: item, index }" >
             <div :class="['email-row', props.type, {'email-row-selected': item.emailId === props.selectedEmailId}]"
                  :data-checked="item.checked"
-                 @click="jumpDetails(item)"
+                 @pointerdown="handleRowPointerDown"
+                 @pointerup="handleRowPointerUp($event, item)"
+                 @click="jumpDetails($event, item)"
                  v-if="!item.expand"
                  :key="item.emailId"
                  @contextmenu="handleContextmenu($event, item)"
@@ -205,6 +213,14 @@
               </div>
             </template>
           </el-dropdown-item>
+          <el-dropdown-item v-if="['email','star'].includes(props.type) && canCreateManagedMailbox(rightClickEmail)" @click="createManagedMailbox(rightClickEmail)">
+            <template #default>
+              <div class="right-dropdown-item">
+                <Icon icon="fluent:mail-add-20-regular" width="20" height="20" />
+                <span>创建资产/子邮箱</span>
+              </div>
+            </template>
+          </el-dropdown-item>
           <el-dropdown-item v-if="props.type === 'all-email'" @click="handleSearch('user', rightClickEmail.userEmail)">
             <template #default>
               <div class="right-dropdown-item">
@@ -311,7 +327,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['jump', 'refresh-before', 'delete-draft', 'right-search', 'block-sender'])
+const emit = defineEmits(['jump', 'refresh-before', 'delete-draft', 'right-search', 'block-sender', 'create-managed-mailbox'])
 const {t} = useI18n()
 const settingStore = useSettingStore()
 const uiStore = useUiStore();
@@ -339,7 +355,9 @@ const dropdownCloseLock = ref(false);
 const dropdownShow = ref(false);
 const rightClickEmail = ref({});
 const checkedEmailCount = ref(0);
+const pointerStart = reactive({ x: 0, y: 0 })
 let timer = null
+let suppressClickUntil = 0
 const position = ref(
     DOMRect.fromRect({
       x: 0,
@@ -718,6 +736,33 @@ function blockSender(email) {
   emit('block-sender', email);
 }
 
+function createManagedMailbox(email) {
+  emit('create-managed-mailbox', email);
+}
+
+function canCreateManagedMailbox(email) {
+  const value = normalizeEmail(email?.toEmail || pickRecipientEmail(email?.recipient))
+  if (!value || email?.type !== 0) return false
+  return ['feilong168.com', 'baofa.de', 'ntmcn.com'].includes(value.split('@').pop())
+}
+
+function pickRecipientEmail(recipient) {
+  try {
+    const list = JSON.parse(recipient || '[]')
+    if (Array.isArray(list)) {
+      const item = list.find(row => normalizeEmail(row?.address))
+      if (item) return normalizeEmail(item.address)
+    }
+  } catch (e) {
+    // ignore malformed recipient data
+  }
+  return ''
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
 async function copyCode(code) {
   try {
     await navigator.clipboard.writeText(code);
@@ -841,7 +886,35 @@ function updateCheckStatus() {
   isIndeterminate.value = checkedCount > 0 && checkedCount < emailList.length;
 }
 
-function jumpDetails(email) {
+function isInteractiveTarget(event) {
+  return event?.target?.closest?.('button,a,input,textarea,select,label,[role="button"],.el-checkbox,.pc-star,.code-tag')
+}
+
+function handleRowPointerDown(event) {
+  if (event.pointerType === 'mouse') return
+  pointerStart.x = event.clientX || 0
+  pointerStart.y = event.clientY || 0
+}
+
+function handleRowPointerUp(event, email) {
+  if (event.pointerType === 'mouse') return
+  if (isInteractiveTarget(event)) return
+
+  const dx = Math.abs((event.clientX || 0) - pointerStart.x)
+  const dy = Math.abs((event.clientY || 0) - pointerStart.y)
+  if (dx > 10 || dy > 10) return
+
+  suppressClickUntil = Date.now() + 350
+  openEmailDetails(email)
+}
+
+function jumpDetails(event, email) {
+  if (Date.now() < suppressClickUntil) return
+  if (isInteractiveTarget(event)) return
+  openEmailDetails(email)
+}
+
+function openEmailDetails(email) {
 
   if (dropdownShow.value) {
     dropdownRef.value.handleClose();
@@ -1049,6 +1122,7 @@ function loadData() {
   @media (pointer: coarse) {
     /* 触屏 */
     user-select: none;
+    touch-action: pan-y;
   }
   &.all-email {
     height: 65px;

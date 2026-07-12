@@ -1,3 +1,9 @@
+/*
+ * STABLE GUARD:
+ * 本服务支撑本地软件的全局收件箱读取、TikTok 验证码接码、子邮箱 Token、资产同步。
+ * 禁止删除 mail/list、code/latest、sub-account/token、account/sync 等稳定链路。
+ * 修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+ */
 import dayjs from 'dayjs';
 import BizError from '../error/biz-error';
 import KvConst from '../const/kv-const';
@@ -7,6 +13,7 @@ import emailUtils from '../utils/email-utils';
 import verifyUtils from '../utils/verify-utils';
 import codeUtils from '../utils/code-utils';
 import { v4 as uuidv4 } from 'uuid';
+import subAccountService from './sub-account-service';
 
 const DATE_FORMAT = 'YYYY-MM-DD HH:mm:ss';
 
@@ -171,6 +178,24 @@ const localAgentService = {
 		`).bind(targetEmail).first();
 
 		if (!row || Number(row.isDel) === isDel.DELETE) {
+			if (this.truthy(params.ensure || params.ensureToken || params.generate || params.createIfMissing || params.create_if_missing)) {
+				const created = await subAccountService.ensureManagedEmailForAgent(c, {
+					email: targetEmail,
+					userEmail: params.userEmail || c.env.admin,
+					source: 'login-agent',
+					ensureToken: true
+				});
+				return {
+					accountId: created.accountId,
+					email: targetEmail,
+					hasToken: created.hasToken,
+					token: created.token || '',
+					generated: created.generatedToken,
+					created: created.action === 'created',
+					restored: created.action === 'restored',
+					action: created.action
+				};
+			}
 			throw new BizError('account not found', 404);
 		}
 
@@ -257,6 +282,10 @@ const localAgentService = {
 			return { action: 'skipped', email, reason: 'account_not_found' };
 		}
 
+		if (createIfMissing && (!existing || Number(existing.isDel) === isDel.DELETE) && !this.isManagedAutoCreateEmail(c, email)) {
+			return { action: 'skipped', email, reason: 'domain_not_allowed_for_auto_create' };
+		}
+
 		const values = this.buildAccountSyncValues(item, existing || {}, now);
 
 		if (!existing) {
@@ -279,7 +308,7 @@ const localAgentService = {
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`).bind(
 				email,
-				values.name || emailUtils.getName(email),
+				emailUtils.getName(email),
 				values.tiktokUsername,
 				values.matrixAccountId,
 				values.bitBrowserId,
@@ -303,7 +332,6 @@ const localAgentService = {
 		await c.env.db.prepare(`
 			UPDATE account
 			SET
-				name = ?,
 				tiktok_username = ?,
 				matrix_account_id = ?,
 				bit_browser_id = ?,
@@ -316,7 +344,6 @@ const localAgentService = {
 				is_del = ?
 			WHERE account_id = ?
 		`).bind(
-			values.name,
 			values.tiktokUsername,
 			values.matrixAccountId,
 			values.bitBrowserId,
@@ -345,19 +372,43 @@ const localAgentService = {
 		const hasViews = this.hasValue(item, ['views', 'viewsCurrent', 'views_current', 'tiktokViews']);
 		const viewsText = this.cleanText(item.viewsText || item.views_text || item.viewsCurrentText || item.views_current_text);
 		const hasStats = hasFollowers || hasViews || Boolean(viewsText);
+		const shouldSyncStats = hasStats && this.shouldSyncStats(item, existing, now);
 
 		return {
-			name: this.cleanText(item.name || item.remark || existing.name || ''),
 			tiktokUsername: username || existing.tiktokUsername || '',
 			matrixAccountId: this.cleanText(item.matrixAccountId || item.matrix_account_id || item.accountId || item.account_id || existing.matrixAccountId || ''),
 			bitBrowserId: this.cleanText(item.bitBrowserId || item.bit_browser_id || item.browserId || item.browser_id || existing.bitBrowserId || ''),
-			tiktokFollowers: hasFollowers ? this.parseMetric(item.followers ?? item.fans ?? item.fansCurrent ?? item.fans_current ?? item.tiktokFollowers) : Number(existing.tiktokFollowers || 0),
-			tiktokViews: hasViews ? this.parseMetric(item.views ?? item.viewsCurrent ?? item.views_current ?? item.tiktokViews) : Number(existing.tiktokViews || 0),
-			tiktokViewsText: viewsText || existing.tiktokViewsText || '',
+			tiktokFollowers: shouldSyncStats && hasFollowers ? this.parseMetric(item.followers ?? item.fans ?? item.fansCurrent ?? item.fans_current ?? item.tiktokFollowers) : Number(existing.tiktokFollowers || 0),
+			tiktokViews: shouldSyncStats && hasViews ? this.parseMetric(item.views ?? item.viewsCurrent ?? item.views_current ?? item.tiktokViews) : Number(existing.tiktokViews || 0),
+			tiktokViewsText: shouldSyncStats && viewsText ? viewsText : existing.tiktokViewsText || '',
 			loginStatus: this.cleanText(item.loginStatus || item.login_status || item.status || existing.loginStatus || ''),
-			hasStats,
+			hasStats: shouldSyncStats,
 			now
 		};
+	},
+
+	shouldSyncStats(item, existing, now) {
+		const forceStats = ['forceStatsSync', 'force_stats_sync', 'statsForce', 'stats_force']
+			.some(key => this.truthy(item[key]));
+		if (forceStats) {
+			return true;
+		}
+
+		const hasExistingStats = Number(existing.tiktokFollowers || 0) > 0
+			|| Number(existing.tiktokViews || 0) > 0
+			|| Boolean(this.cleanText(existing.tiktokViewsText || ''));
+		if (!hasExistingStats) {
+			return true;
+		}
+
+		const lastStatsSyncAt = this.cleanText(existing.lastStatsSyncAt || '');
+		if (!lastStatsSyncAt) {
+			return true;
+		}
+
+		const lastDay = dayjs(lastStatsSyncAt).format('YYYY-MM-DD');
+		const currentDay = dayjs(now).format('YYYY-MM-DD');
+		return lastDay !== currentDay;
 	},
 
 	async queryMailRows(c, params, options = {}) {
@@ -547,6 +598,15 @@ const localAgentService = {
 			value = value.slice(7).trim();
 		}
 		return value;
+	},
+
+	isManagedAutoCreateEmail(c, email) {
+		try {
+			subAccountService.verifyManagedEmail(c, email);
+			return true;
+		} catch (e) {
+			return false;
+		}
 	},
 
 	normalizeSyncItems(payload) {

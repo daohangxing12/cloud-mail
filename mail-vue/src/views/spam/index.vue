@@ -1,4 +1,8 @@
-﻿<template>
+﻿<!--
+  STABLE GUARD:
+  垃圾邮箱是全局垃圾邮箱，所有域名共用，并与完整邮箱精准拉黑联动。
+  禁止改回按域名单独选择垃圾邮箱，禁止删除拉黑入口。
+--><template>
   <div class="mail-workspace">
     <section class="mail-list-pane">
       <div class="mail-search-bar">
@@ -202,3 +206,4 @@ function setGlobalSpamAccount() {
   }
 }
 </style>
+

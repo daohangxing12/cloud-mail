@@ -3,6 +3,9 @@ main = "src/index.js"
 compatibility_date = "2025-06-04"
 keep_vars = true
 
+# STABLE GUARD:
+# mail.ntmcn.com 是当前稳定网页入口；212202.xyz 是当前稳定 API/同步入口。
+# 禁止改回 email.ntmcn.com、api.orz.gay、ppp.nte.li 或其它历史测试入口。
 [observability]
 enabled = true
 
@@ -39,8 +42,9 @@ crons = ["0 16 * * *"]
 ai_model = ""
 analysis_cache = false
 orm_log = false
-domain = ["orz.gay", "212202.xyz", "feilong168.com", "ntmcn.com", "baofa.de"]
+domain = ["feilong168.com", "ntmcn.com", "baofa.de"]
 admin = "admin@orz.gay"
 
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"
+

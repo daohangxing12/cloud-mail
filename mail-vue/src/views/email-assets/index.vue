@@ -1,9 +1,15 @@
+<!--
+  STABLE GUARD:
+  邮箱资产中心承载邮箱、TikTok 用户名、粉丝、播放量、登录状态同步。
+  禁止随意删除字段、入口、统计或同步展示逻辑。
+  修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+-->
 <template>
   <div class="email-assets">
     <div class="toolbar">
       <div class="title">
         <h2>邮箱资产</h2>
-        <p>这里看账号邮箱、比特窗口、TikTok 资产和接码状态。</p>
+        <p>这里看邮箱接码、TikTok 资产和中视频状态。</p>
       </div>
       <div class="filters">
         <el-select v-model="params.domain" clearable placeholder="全部域名" @change="search">
@@ -15,9 +21,7 @@
           <el-option label="到期可重申" value="retryReady"/>
           <el-option label="未识别" value="unrecognized"/>
         </el-select>
-        <el-input v-model="params.keyword" clearable placeholder="邮箱 / 备注 / 用户名 / Bit ID" @keyup.enter="search" @clear="search"/>
-        <el-checkbox v-model="params.assetOnly" @change="search">只看资产</el-checkbox>
-        <el-checkbox v-model="params.configuredOnly" @change="search">只看已接管域名</el-checkbox>
+        <el-input v-model="params.keyword" clearable placeholder="邮箱 / TikTok / 用户名" @keyup.enter="search" @clear="search"/>
         <el-button type="primary" @click="search">查询</el-button>
         <el-button :loading="scanLoading" type="success" plain @click="scanCreatorRewards">扫描中视频邮件</el-button>
       </div>
@@ -32,33 +36,25 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="备注 / 分组" min-width="150" show-overflow-tooltip/>
-      <el-table-column prop="bitBrowserId" label="Bit窗口ID" min-width="180" show-overflow-tooltip/>
       <el-table-column prop="tiktokUsername" label="TikTok" min-width="140" show-overflow-tooltip/>
-      <el-table-column label="中视频" min-width="190">
+      <el-table-column label="中视频" min-width="220">
         <template #default="scope">
           <el-tag v-if="scope.row.creatorRewardsStatus === 'joined'" type="success" size="small">已加入</el-tag>
           <el-tag v-else-if="scope.row.creatorRewardsStatus === 'rejected'" type="danger" size="small">被拒</el-tag>
           <span v-else>-</span>
           <div v-if="scope.row.creatorRewardsUsername" class="sub-text">@{{ scope.row.creatorRewardsUsername }}</div>
-        </template>
-      </el-table-column>
-      <el-table-column label="中视频时间" min-width="210" show-overflow-tooltip>
-        <template #default="scope">
-          <template v-if="scope.row.creatorRewardsStatus === 'joined'">
+          <div v-if="scope.row.creatorRewardsStatus === 'joined'" class="sub-text">
             加入：{{ shortTime(scope.row.creatorRewardsJoinedAt) }}
-          </template>
-          <template v-else-if="scope.row.creatorRewardsStatus === 'rejected'">
-            被拒：{{ shortTime(scope.row.creatorRewardsRejectedAt) }}
-            <div class="sub-text">可重申：{{ shortTime(scope.row.creatorRewardsRetryAt) }}</div>
-          </template>
-          <template v-else>-</template>
+          </div>
+          <div v-else-if="scope.row.creatorRewardsStatus === 'rejected'" class="sub-text">
+            被拒：{{ shortTime(scope.row.creatorRewardsRejectedAt) }}，可重申：{{ shortTime(scope.row.creatorRewardsRetryAt) }}
+          </div>
         </template>
       </el-table-column>
-      <el-table-column prop="tiktokFollowers" label="粉丝" width="100"/>
-      <el-table-column label="播放" width="120">
+      <el-table-column label="粉丝 / 播放" width="130">
         <template #default="scope">
-          {{ scope.row.tiktokViewsText || scope.row.tiktokViews || '-' }}
+          <div>{{ scope.row.tiktokFollowers || '-' }}</div>
+          <div class="sub-text">{{ scope.row.tiktokViewsText || scope.row.tiktokViews || '-' }}</div>
         </template>
       </el-table-column>
       <el-table-column label="接码Token" width="110">
@@ -73,8 +69,11 @@
           {{ scope.row.loginStatus || '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="creatorRewardsLastCheckedAt" label="识别时间" min-width="170"/>
-      <el-table-column prop="lastAgentSyncAt" label="同步时间" min-width="170"/>
+      <el-table-column label="更新时间" min-width="170">
+        <template #default="scope">
+          {{ latestTime(scope.row) }}
+        </template>
+      </el-table-column>
     </el-table>
 
     <div class="pagination">
@@ -183,6 +182,10 @@ function cleanDomain(domain) {
 
 function shortTime(value) {
   return value ? tzDayjs(value).format('YYYY-MM-DD HH:mm') : '-'
+}
+
+function latestTime(row) {
+  return shortTime(row.lastStatsSyncAt || row.creatorRewardsLastCheckedAt || row.lastAgentSyncAt)
 }
 </script>
 

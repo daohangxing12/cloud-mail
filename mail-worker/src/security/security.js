@@ -1,3 +1,9 @@
+/*
+ * STABLE GUARD:
+ * 权限白名单/权限映射会直接影响全局收件箱、子邮箱、资产中心和本地 local-agent 接口。
+ * 禁止随意移除 /local-agent、/asset/list、/subAccount/*、/allEmail/* 等稳定权限。
+ * 修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+ */
 import BizError from '../error/biz-error';
 import constant from '../const/constant';
 import jwtUtils from '../utils/jwt-utils';
@@ -61,6 +67,9 @@ const requirePerms = [
 	'/subAccount/add',
 	'/subAccount/import',
 	'/subAccount/ensureAssets',
+	'/subAccount/ensureManaged',
+	'/subAccount/ensureFromEmail',
+	'/subAccount/scanUnmanaged',
 	'/subAccount/setName',
 	'/subAccount/setTiktok',
 	'/subAccount/token',
@@ -89,7 +98,7 @@ const premKey = {
 	'role:query': ['/role/list', '/role/tree'],
 	'role:delete': ['/role/delete'],
 	'user:query': ['/user/list','/user/allAccount', '/subAccount/list', '/subAccount/token', '/asset/overview', '/asset/list'],
-	'user:add': ['/user/add', '/subAccount/add', '/subAccount/import', '/subAccount/ensureAssets', '/asset/scanCreatorRewards'],
+	'user:add': ['/user/add', '/subAccount/add', '/subAccount/import', '/subAccount/ensureAssets', '/subAccount/ensureManaged', '/subAccount/ensureFromEmail', '/subAccount/scanUnmanaged', '/asset/scanCreatorRewards'],
 	'user:reset-send': ['/user/resetSendCount'],
 	'user:set-pwd': ['/user/setPwd'],
 	'user:set-status': ['/user/setStatus', '/user/restore', '/subAccount/setName', '/subAccount/setTiktok', '/subAccount/genToken'],

@@ -1,3 +1,8 @@
+/*
+ * STABLE GUARD:
+ * 邮件请求层支撑全局收件箱、全局垃圾邮箱、精准拉黑和右侧详情。
+ * 禁止随意改参数结构，避免本地接码和前端列表失效。
+ */
 import http from '@/axios/index.js';
 
 export function emailList(accountId, allReceive, emailId, timeSort, size, type, domain = '', spam = 0, keyword = '') {

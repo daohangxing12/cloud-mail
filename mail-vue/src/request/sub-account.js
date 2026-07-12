@@ -1,3 +1,8 @@
+/*
+ * STABLE GUARD:
+ * 子邮箱请求层供子邮箱管理、Token 接码、资产邮箱接管使用。
+ * 禁止随意删除 token/ensure/import/scan 等接口封装。
+ */
 import http from '@/axios/index.js'
 
 export function subAccountList(params) {
@@ -14,6 +19,18 @@ export function subAccountImport(form) {
 
 export function subAccountEnsureAssets(form) {
     return http.post('/subAccount/ensureAssets', form)
+}
+
+export function subAccountEnsureManaged(form) {
+    return http.post('/subAccount/ensureManaged', form)
+}
+
+export function subAccountEnsureFromEmail(form) {
+    return http.post('/subAccount/ensureFromEmail', form)
+}
+
+export function subAccountScanUnmanaged(form) {
+    return http.post('/subAccount/scanUnmanaged', form)
 }
 
 export function subAccountSetName(accountId, name) {

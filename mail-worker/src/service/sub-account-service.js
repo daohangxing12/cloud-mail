@@ -1,3 +1,9 @@
+/*
+ * STABLE GUARD:
+ * 子邮箱服务负责管理 feilong168.com、baofa.de、ntmcn.com 的可接码邮箱和 Token。
+ * 禁止破坏自动创建、Token 生成、资产邮箱转子邮箱、未建档邮箱扫描。
+ * 修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+ */
 import BizError from '../error/biz-error';
 import { emailConst, isDel } from '../const/entity-const';
 import emailUtils from '../utils/email-utils';
@@ -13,6 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 import KvConst from '../const/kv-const';
 
 const MAX_IMPORT_COUNT = 200;
+const MANAGED_AUTO_CREATE_DOMAINS = ['feilong168.com', 'baofa.de', 'ntmcn.com'];
 
 const subAccountService = {
 	async list(c, params) {
@@ -177,6 +184,157 @@ const subAccountService = {
 		};
 	},
 
+	async ensureManagedEmail(c, params = {}) {
+		const email = this.normalizeEmail(params.email || params.toEmail || params.username);
+		this.verifyManagedEmail(c, email);
+
+		const targetUser = await this.resolveTargetUser(c, params);
+		return this.ensureAccountRecord(c, {
+			email,
+			userId: targetUser.userId,
+			name: params.name || '',
+			source: params.source || 'manual',
+			ensureToken: this.truthy(params.ensureToken ?? params.generateToken ?? params.ensure ?? true)
+		});
+	},
+
+	async ensureManagedEmailForAgent(c, params = {}) {
+		const email = this.normalizeEmail(params.email || params.toEmail || params.username);
+		this.verifyManagedEmail(c, email);
+
+		const userEmail = params.userEmail || c.env.admin;
+		const targetUser = await this.resolveUserByEmail(c, userEmail);
+		return this.ensureAccountRecord(c, {
+			email,
+			userId: targetUser.userId,
+			name: params.name || '',
+			source: params.source || 'login-agent',
+			ensureToken: this.truthy(params.ensureToken ?? params.generateToken ?? params.ensure ?? true)
+		});
+	},
+
+	async ensureFromEmail(c, params = {}) {
+		const emailId = Number(params.emailId || params.id || 0);
+		if (!emailId) {
+			throw new BizError('emailId required', 400);
+		}
+
+		const currentUser = userContext.getUser(c);
+		const mailRow = await c.env.db.prepare(`
+			SELECT
+				email_id AS emailId,
+				to_email AS toEmail,
+				recipient,
+				subject,
+				send_email AS sendEmail
+			FROM email
+			WHERE email_id = ?
+			  AND user_id = ?
+			  AND is_del = ?
+			LIMIT 1
+		`).bind(emailId, currentUser.userId, isDel.NORMAL).first();
+
+		if (!mailRow) {
+			throw new BizError('email not found', 404);
+		}
+
+		const targetEmail = this.pickReceiveEmail(mailRow);
+		this.verifyManagedEmail(c, targetEmail);
+
+		return this.ensureAccountRecord(c, {
+			email: targetEmail,
+			userId: currentUser.userId,
+			name: params.name || emailUtils.getName(targetEmail),
+			source: 'mail-detail',
+			ensureToken: this.truthy(params.ensureToken ?? params.generateToken ?? true),
+			sourceEmailId: mailRow.emailId,
+			sourceSubject: mailRow.subject || '',
+			sourceSender: mailRow.sendEmail || ''
+		});
+	},
+
+	async scanUnmanagedMailboxes(c, params = {}) {
+		const currentUser = userContext.getUser(c);
+		const allowedDomains = this.managedAutoCreateDomains(c);
+		if (allowedDomains.length === 0) {
+			return { list: [], total: 0, created: [], restored: [], existing: [], failed: [] };
+		}
+
+		const domain = this.normalizeDomain(params.domain);
+		const domains = domain ? [domain] : allowedDomains;
+		domains.forEach(item => {
+			if (!allowedDomains.includes(item)) {
+				throw new BizError('domain is not allowed for managed mailbox creation', 400);
+			}
+		});
+
+		const limit = Math.min(Math.max(Number(params.limit || 300), 1), 1000);
+		const domainSql = domains.map(() => '?').join(',');
+		const { results } = await c.env.db.prepare(`
+			SELECT
+				LOWER(e.to_email) AS email,
+				COUNT(*) AS mailCount,
+				MAX(e.email_id) AS latestEmailId,
+				MAX(e.create_time) AS latestEmailTime
+			FROM email e
+			LEFT JOIN account a
+				ON a.email COLLATE NOCASE = e.to_email COLLATE NOCASE
+			   AND a.is_del = ?
+			WHERE e.user_id = ?
+			  AND e.type = ?
+			  AND e.is_del = ?
+			  AND COALESCE(e.to_email, '') <> ''
+			  AND LOWER(SUBSTR(e.to_email, INSTR(e.to_email, '@') + 1)) IN (${domainSql})
+			  AND a.account_id IS NULL
+			GROUP BY LOWER(e.to_email)
+			ORDER BY latestEmailId DESC
+			LIMIT ?
+		`).bind(
+			isDel.NORMAL,
+			currentUser.userId,
+			emailConst.type.RECEIVE,
+			isDel.NORMAL,
+			...domains,
+			limit
+		).all();
+
+		const list = (results || []).map(row => ({
+			email: this.normalizeEmail(row.email),
+			domain: emailUtils.getDomain(row.email),
+			mailCount: Number(row.mailCount || 0),
+			latestEmailId: Number(row.latestEmailId || 0),
+			latestEmailTime: row.latestEmailTime || ''
+		})).filter(row => row.email);
+
+		if (!this.truthy(params.create)) {
+			return { list, total: list.length, created: [], restored: [], existing: [], failed: [] };
+		}
+
+		const created = [];
+		const restored = [];
+		const existing = [];
+		const failed = [];
+		for (const row of list) {
+			try {
+				const result = await this.ensureAccountRecord(c, {
+					email: row.email,
+					userId: currentUser.userId,
+					name: emailUtils.getName(row.email),
+					source: 'mail-scan',
+					ensureToken: this.truthy(params.ensureToken ?? params.generateToken ?? false),
+					sourceEmailId: row.latestEmailId
+				});
+				if (result.action === 'created') created.push(row.email);
+				else if (result.action === 'restored') restored.push(row.email);
+				else existing.push(row.email);
+			} catch (e) {
+				failed.push({ email: row.email, message: e.message });
+			}
+		}
+
+		return { list, total: list.length, created, restored, existing, failed };
+	},
+
 	async setName(c, params) {
 		const { accountId, name } = params;
 		if (!accountId) {
@@ -205,6 +363,50 @@ const subAccountService = {
 		const token = uuidv4().replaceAll('-', '');
 		await c.env.kv.put(this.tokenKey(accountRow.email), token);
 		return { token, hasToken: true };
+	},
+
+	async ensureAccountRecord(c, options = {}) {
+		const email = this.normalizeEmail(options.email);
+		this.verifyManagedEmail(c, email);
+		const userId = Number(options.userId || 0);
+		if (!userId) {
+			throw new BizError('userId required', 400);
+		}
+
+		let accountRow = await accountService.selectByEmailIncludeDel(c, email);
+		const accountName = options.name || emailUtils.getName(email);
+		let action = 'existing';
+
+		if (accountRow && accountRow.isDel === isDel.DELETE) {
+			await c.env.db.prepare(`
+				UPDATE account
+				SET user_id = ?, name = ?, is_del = ?, create_time = CURRENT_TIMESTAMP
+				WHERE account_id = ?
+			`).bind(userId, accountName, isDel.NORMAL, accountRow.accountId).run();
+			accountRow = await accountService.selectByEmailIncludeDel(c, email);
+			action = 'restored';
+		} else if (!accountRow) {
+			accountRow = await this.addOne(c, email, userId, accountName);
+			action = 'created';
+		}
+
+		let token = await c.env.kv.get(this.tokenKey(email));
+		let generatedToken = false;
+		if (!token && this.truthy(options.ensureToken)) {
+			token = uuidv4().replaceAll('-', '');
+			await c.env.kv.put(this.tokenKey(email), token);
+			generatedToken = true;
+		}
+
+		return {
+			action,
+			accountId: accountRow.accountId,
+			email,
+			hasToken: !!token,
+			token: token || '',
+			generatedToken,
+			source: options.source || ''
+		};
 	},
 
 	async getToken(c, params) {
@@ -419,6 +621,13 @@ const subAccountService = {
 		return row;
 	},
 
+	async resolveUserByEmail(c, userEmail) {
+		const email = this.normalizeEmail(userEmail || c.env.admin);
+		const row = await userService.selectByEmail(c, email);
+		if (!row) throw new BizError(t('notExistUser'));
+		return row;
+	},
+
 	parseImportEmails(text) {
 		const matches = String(text).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
 		return [...new Set(matches.map(email => this.normalizeEmail(email)))];
@@ -463,6 +672,39 @@ const subAccountService = {
 
 	normalizeEmail(email) {
 		return String(email || '').trim().toLowerCase();
+	},
+
+	managedAutoCreateDomains(c) {
+		const configured = this.envDomainList(c.env.domain);
+		return MANAGED_AUTO_CREATE_DOMAINS.filter(domain => configured.includes(domain));
+	},
+
+	verifyManagedEmail(c, email) {
+		if (!email) {
+			throw new BizError(t('emptyEmail'));
+		}
+		if (!verifyUtils.isEmail(email)) {
+			throw new BizError(t('notEmail'));
+		}
+		const domain = emailUtils.getDomain(email);
+		if (!this.managedAutoCreateDomains(c).includes(domain)) {
+			throw new BizError('domain is not allowed for managed mailbox creation', 400);
+		}
+	},
+
+	pickReceiveEmail(mailRow) {
+		const direct = this.normalizeEmail(mailRow?.toEmail);
+		if (direct) return direct;
+		try {
+			const list = JSON.parse(mailRow?.recipient || '[]');
+			if (Array.isArray(list)) {
+				const item = list.find(row => this.normalizeEmail(row?.address));
+				if (item) return this.normalizeEmail(item.address);
+			}
+		} catch (e) {
+			// ignore malformed recipient data
+		}
+		return '';
 	},
 
 	normalizeDomain(domain) {
@@ -544,6 +786,10 @@ const subAccountService = {
 
 	tokenKey(email) {
 		return KvConst.SUB_ACCOUNT_TOKEN + this.normalizeEmail(email);
+	},
+
+	truthy(value) {
+		return value === true || value === 1 || ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 	},
 
 	verifyEmail(c, email) {

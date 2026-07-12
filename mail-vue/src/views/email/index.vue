@@ -1,3 +1,9 @@
+<!--
+  STABLE GUARD:
+  收件箱三栏阅读布局、顶部搜索、邮件列表头像/摘要、右侧详情是当前稳定功能。
+  后续 AI/工程师禁止随意删除、重构回旧版或改成弹窗式详情。
+  修改前必须先阅读 cloud-mail/AGENTS.md 和 STABLE_FEATURES_DO_NOT_BREAK.md。
+-->
 <template>
   <div class="mail-workspace">
     <section class="mail-list-pane">
@@ -26,9 +32,10 @@
                    :show-unread="true"
                    :selected-email-id="selectedEmail?.emailId || 0"
                    actionLeft="4px"
-                   @jump="jumpContent"
-                   @block-sender="blockSenderFromList"
-      >
+                    @jump="jumpContent"
+                    @block-sender="blockSenderFromList"
+                    @create-managed-mailbox="createManagedMailboxFromList"
+       >
         <template #first>
           <Icon class="icon" @click="changeTimeSort" icon="material-symbols-light:timer-arrow-down-outline"
                 v-if="params.timeSort === 0" width="28" height="28"/>
@@ -59,11 +66,13 @@ import {useUserStore} from "@/store/user.js";
 import emailScroll from "@/components/email-scroll/index.vue"
 import ContentPanel from "@/views/content/index.vue";
 import {emailBlockSender, emailList, emailDelete, emailLatest, emailRead} from "@/request/email.js";
+import {subAccountEnsureFromEmail} from "@/request/sub-account.js";
 import {starAdd, starCancel} from "@/request/star.js";
 import {defineOptions, onMounted, reactive, ref, watch} from "vue";
 import {sleep} from "@/utils/time-utils.js";
 import {Icon} from "@iconify/vue";
 import { useRoute } from 'vue-router'
+import router from "@/router/index.js";
 import {debounce} from 'lodash-es'
 
 defineOptions({
@@ -109,6 +118,10 @@ function jumpContent(email) {
   emailStore.contentData.showUnread = true
   emailStore.contentData.showStar = true
   emailStore.contentData.showReply = true
+  if (!isThreePane()) {
+    router.push({name: 'content', query: { id: email.emailId }})
+    return
+  }
   selectedEmail.value = email
 }
 
@@ -119,6 +132,10 @@ function closeDetail() {
 function refreshSearch() {
   closeDetail()
   scroll.value.refreshList?.()
+}
+
+function isThreePane() {
+  return window.innerWidth > 1024
 }
 
 function blockSenderFromList(email) {
@@ -139,6 +156,33 @@ function blockSenderFromList(email) {
         closeDetail()
       }
       window.dispatchEvent(new CustomEvent('mail-unread-changed'))
+      window.dispatchEvent(new CustomEvent('mail-insights-changed'))
+    })
+  })
+}
+
+function createManagedMailboxFromList(email) {
+  if (!email?.emailId) return
+  const targetEmail = String(email.toEmail || '').trim().toLowerCase()
+  ElMessageBox.confirm(`确认把 ${targetEmail || '当前收件邮箱'} 创建到资产/子邮箱管理，并准备接码 Token？`, {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    subAccountEnsureFromEmail({
+      emailId: email.emailId,
+      ensureToken: true
+    }).then(data => {
+      const actionText = {
+        created: '已创建',
+        restored: '已恢复',
+        existing: '已存在'
+      }[data.action] || '已处理'
+      ElMessage({
+        message: `${actionText}：${data.email}${data.generatedToken ? '，已生成接码 Token' : ''}`,
+        type: 'success',
+        plain: true
+      })
       window.dispatchEvent(new CustomEvent('mail-insights-changed'))
     })
   })
