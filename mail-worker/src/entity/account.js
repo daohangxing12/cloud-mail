@@ -4,6 +4,7 @@ export const account = sqliteTable('account', {
 	accountId: integer('account_id').primaryKey({ autoIncrement: true }),
 	email: text('email').notNull(),
 	name: text('name').notNull().default(''),
+	windowName: text('window_name').notNull().default(''),
 	tiktokUsername: text('tiktok_username').notNull().default(''),
 	creatorRewardsUsername: text('creator_rewards_username').notNull().default(''),
 	creatorRewardsStatus: text('creator_rewards_status').notNull().default(''),

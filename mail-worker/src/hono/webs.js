@@ -23,4 +23,5 @@ import '../api/telegram-api'
 import '../api/oauth-api'
 import '../api/local-agent-api'
 import '../api/asset-api'
+import '../api/desktop-sync-api'
 export default app;

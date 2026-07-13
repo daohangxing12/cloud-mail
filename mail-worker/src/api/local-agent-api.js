@@ -48,6 +48,11 @@ app.post('/local-agent/account/sync', async (c) => {
 	return c.json(result.ok(data));
 });
 
+app.post('/local-agent/account/delete', async (c) => {
+	const data = await localAgentService.deleteAccount(c, await c.req.json());
+	return c.json(result.ok(data));
+});
+
 app.post('/local-agent/tiktok/stats', async (c) => {
 	const data = await localAgentService.syncAccount(c, await c.req.json());
 	return c.json(result.ok(data));

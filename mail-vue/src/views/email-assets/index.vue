@@ -21,23 +21,34 @@
           <el-option label="到期可重申" value="retryReady"/>
           <el-option label="未识别" value="unrecognized"/>
         </el-select>
-        <el-input v-model="params.keyword" clearable placeholder="邮箱 / TikTok / 用户名" @keyup.enter="search" @clear="search"/>
+        <el-input v-model="params.keyword" clearable placeholder="邮箱 / 窗口名 / TikTok / 用户名" @keyup.enter="search" @clear="search"/>
         <el-button type="primary" @click="search">查询</el-button>
         <el-button :loading="scanLoading" type="success" plain @click="scanCreatorRewards">扫描中视频邮件</el-button>
       </div>
     </div>
 
-    <el-table v-loading="loading" :data="list" style="width: 100%">
-      <el-table-column prop="email" label="邮箱" min-width="230" show-overflow-tooltip/>
-      <el-table-column prop="domain" label="域名" width="150">
+    <el-table v-loading="loading" :data="list" style="width: 100%" @sort-change="sortChange">
+      <el-table-column prop="email" label="邮箱" min-width="230" sortable="custom" show-overflow-tooltip>
         <template #default="scope">
-          <el-tag :type="scope.row.canReceive ? 'success' : 'info'" size="small">
-            {{ scope.row.domain }}
-          </el-tag>
+          <span v-if="scope.row.email">{{ scope.row.email }}</span>
+          <el-tag v-else type="warning" size="small">未绑定邮箱</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="tiktokUsername" label="TikTok" min-width="140" show-overflow-tooltip/>
-      <el-table-column label="中视频" min-width="220">
+      <el-table-column prop="windowName" label="窗口名" min-width="150" sortable="custom" show-overflow-tooltip>
+        <template #default="scope">
+          {{ scope.row.windowName || scope.row.name || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="domain" label="域名" width="150" sortable="custom">
+        <template #default="scope">
+          <el-tag v-if="scope.row.domain" :type="scope.row.canReceive ? 'success' : 'info'" size="small">
+            {{ scope.row.domain }}
+          </el-tag>
+          <span v-else class="sub-text">无邮箱</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="tiktokUsername" label="TikTok" min-width="140" sortable="custom" show-overflow-tooltip/>
+      <el-table-column prop="creatorRewardsStatus" label="中视频" min-width="220" sortable="custom">
         <template #default="scope">
           <el-tag v-if="scope.row.creatorRewardsStatus === 'joined'" type="success" size="small">已加入</el-tag>
           <el-tag v-else-if="scope.row.creatorRewardsStatus === 'rejected'" type="danger" size="small">被拒</el-tag>
@@ -51,7 +62,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="粉丝 / 播放" width="130">
+      <el-table-column prop="tiktokFollowers" label="粉丝 / 播放" width="130" sortable="custom">
         <template #default="scope">
           <div>{{ scope.row.tiktokFollowers || '-' }}</div>
           <div class="sub-text">{{ scope.row.tiktokViewsText || scope.row.tiktokViews || '-' }}</div>
@@ -59,17 +70,18 @@
       </el-table-column>
       <el-table-column label="接码Token" width="110">
         <template #default="scope">
-          <el-tag :type="scope.row.hasToken ? 'success' : 'info'" size="small">
+          <el-tag v-if="scope.row.email" :type="scope.row.hasToken ? 'success' : 'info'" size="small">
             {{ scope.row.hasToken ? '已设置' : '未设置' }}
           </el-tag>
+          <span v-else class="sub-text">不需要</span>
         </template>
       </el-table-column>
-      <el-table-column prop="loginStatus" label="登录状态" width="120">
+      <el-table-column prop="loginStatus" label="登录状态" width="120" sortable="custom">
         <template #default="scope">
           {{ scope.row.loginStatus || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="更新时间" min-width="170">
+      <el-table-column prop="sortTime" label="更新时间" min-width="170" sortable="custom">
         <template #default="scope">
           {{ latestTime(scope.row) }}
         </template>
@@ -116,6 +128,8 @@ const params = reactive({
   keyword: '',
   assetOnly: true,
   configuredOnly: false,
+  sortBy: 'sortTime',
+  sortOrder: 'desc',
   num: 1,
   size: 20
 })
@@ -142,6 +156,13 @@ function numChange(num) {
 
 function sizeChange(size) {
   params.size = size
+  params.num = 1
+  loadData()
+}
+
+function sortChange({prop, order}) {
+  params.sortBy = prop || 'sortTime'
+  params.sortOrder = order === 'ascending' ? 'asc' : 'desc'
   params.num = 1
   loadData()
 }

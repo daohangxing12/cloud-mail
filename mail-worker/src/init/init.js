@@ -33,8 +33,43 @@ const dbInit = {
 		await this.v3_2DB(c);
 		await this.v3_3DB(c);
 		await this.v3_4DB(c);
+		await this.v3_5DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_5DB(c) {
+		const statements = [
+			`ALTER TABLE account ADD COLUMN window_name TEXT NOT NULL DEFAULT '';`,
+			`CREATE TABLE IF NOT EXISTS username_asset (
+				username_asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
+				tiktok_username TEXT NOT NULL DEFAULT '',
+				window_name TEXT NOT NULL DEFAULT '',
+				matrix_account_id TEXT NOT NULL DEFAULT '',
+				bit_browser_id TEXT NOT NULL DEFAULT '',
+				group_name TEXT NOT NULL DEFAULT '',
+				tiktok_followers INTEGER NOT NULL DEFAULT 0,
+				tiktok_views INTEGER NOT NULL DEFAULT 0,
+				tiktok_views_text TEXT NOT NULL DEFAULT '',
+				login_status TEXT NOT NULL DEFAULT '',
+				last_agent_sync_at TEXT NOT NULL DEFAULT '',
+				last_stats_sync_at TEXT NOT NULL DEFAULT '',
+				create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+				update_time TEXT NOT NULL DEFAULT '',
+				is_del INTEGER DEFAULT 0 NOT NULL
+			);`,
+			`CREATE INDEX IF NOT EXISTS idx_username_asset_bit_browser_id ON username_asset(bit_browser_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_username_asset_tiktok_username ON username_asset(tiktok_username);`,
+			`CREATE INDEX IF NOT EXISTS idx_account_window_name ON account(window_name);`
+		];
+
+		for (const statement of statements) {
+			try {
+				await c.env.db.prepare(statement).run();
+			} catch (e) {
+				console.warn(`skip v3_5 db statement: ${e.message}`);
+			}
+		}
 	},
 
 	async v3_4DB(c) {
@@ -650,6 +685,7 @@ const dbInit = {
 		  CREATE TABLE IF NOT EXISTS account (
 			account_id INTEGER PRIMARY KEY AUTOINCREMENT,
 			email TEXT NOT NULL,
+			window_name TEXT NOT NULL DEFAULT '',
 			tiktok_username TEXT NOT NULL DEFAULT '',
 			matrix_account_id TEXT NOT NULL DEFAULT '',
 			bit_browser_id TEXT NOT NULL DEFAULT '',
@@ -671,6 +707,26 @@ const dbInit = {
 			latest_email_time DATETIME,
 			create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
 			user_id INTEGER NOT NULL,
+			is_del INTEGER DEFAULT 0 NOT NULL
+		  )
+		`).run();
+
+		await c.env.db.prepare(`
+		  CREATE TABLE IF NOT EXISTS username_asset (
+			username_asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			tiktok_username TEXT NOT NULL DEFAULT '',
+			window_name TEXT NOT NULL DEFAULT '',
+			matrix_account_id TEXT NOT NULL DEFAULT '',
+			bit_browser_id TEXT NOT NULL DEFAULT '',
+			group_name TEXT NOT NULL DEFAULT '',
+			tiktok_followers INTEGER NOT NULL DEFAULT 0,
+			tiktok_views INTEGER NOT NULL DEFAULT 0,
+			tiktok_views_text TEXT NOT NULL DEFAULT '',
+			login_status TEXT NOT NULL DEFAULT '',
+			last_agent_sync_at TEXT NOT NULL DEFAULT '',
+			last_stats_sync_at TEXT NOT NULL DEFAULT '',
+			create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+			update_time TEXT NOT NULL DEFAULT '',
 			is_del INTEGER DEFAULT 0 NOT NULL
 		  )
 		`).run();

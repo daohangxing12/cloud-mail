@@ -61,6 +61,7 @@ const subAccountService = {
 		}
 
 		const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+		const orderSql = this.subAccountOrderSql(params);
 		const offset = (num - 1) * size;
 		const countSql = `
 			SELECT COUNT(*) AS total
@@ -85,7 +86,7 @@ const subAccountService = {
 			FROM account a
 			LEFT JOIN user u ON u.user_id = a.user_id
 			${whereSql}
-			ORDER BY a.account_id DESC
+			ORDER BY ${orderSql}
 			LIMIT ? OFFSET ?
 		`;
 
@@ -96,6 +97,27 @@ const subAccountService = {
 
 		const rows = await this.attachAccountInsights(c, results);
 		return { list: await this.attachTokenStatus(c, rows), total: countRow?.total || 0 };
+	},
+
+	subAccountOrderSql(params = {}) {
+		const sortBy = String(params.sortBy || params.sortField || params.orderBy || '').trim();
+		const rawOrder = String(params.sortOrder || params.order || params.direction || '').toLowerCase();
+		const direction = ['asc', 'ascending'].includes(rawOrder) ? 'ASC' : 'DESC';
+		const fields = {
+			accountId: 'a.account_id',
+			email: 'LOWER(a.email)',
+			domain: "LOWER(SUBSTR(a.email, INSTR(a.email, '@') + 1))",
+			name: 'LOWER(a.name)',
+			userEmail: 'LOWER(u.email)',
+			tiktokUsername: 'LOWER(a.tiktok_username)',
+			status: 'a.status',
+			isDel: 'a.is_del',
+			latestEmailTime: 'a.latest_email_time',
+			createTime: 'a.create_time'
+		};
+		const field = fields[sortBy] || fields.accountId;
+		const tieBreaker = sortBy === 'accountId' ? '' : ', a.account_id DESC';
+		return `${field} ${direction}${tieBreaker}`;
 	},
 
 	async add(c, params) {

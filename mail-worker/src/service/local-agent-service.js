@@ -97,6 +97,7 @@ const localAgentService = {
 
 	async accountList(c, params = {}) {
 		await this.verifyAgent(c);
+		await this.ensureAssetIdentitySchema(c);
 		const size = this.clampNumber(params.size, 100, 1, 500);
 		const afterAccountId = this.clampNumber(params.afterAccountId || params.afterId, 0, 0, Number.MAX_SAFE_INTEGER);
 		const domain = this.normalizeDomain(params.domain);
@@ -130,6 +131,7 @@ const localAgentService = {
 				account_id AS accountId,
 				email,
 				name,
+				window_name AS windowName,
 				tiktok_username AS tiktokUsername,
 				matrix_account_id AS matrixAccountId,
 				bit_browser_id AS bitBrowserId,
@@ -244,10 +246,166 @@ const localAgentService = {
 		};
 	},
 
+	async deleteAccount(c, payload = {}) {
+		await this.verifyAgent(c);
+		await this.ensureAssetIdentitySchema(c);
+		const items = this.normalizeSyncItems(payload).slice(0, 500);
+		if (items.length === 0) {
+			throw new BizError('delete item is required', 400);
+		}
+
+		const accountRows = new Map();
+		const usernameAssetRows = new Map();
+		let skipped = 0;
+		let protectedCount = 0;
+
+		for (const item of items) {
+			const identity = this.buildDeleteIdentity(item);
+			if (!identity.email && !identity.bitBrowserId && !identity.windowName && !identity.username) {
+				skipped += 1;
+				continue;
+			}
+
+			const accountMatches = await this.findDeleteAccountRows(c, identity);
+			for (const row of accountMatches) {
+				if (row.email && row.userEmail && this.normalizeEmail(row.email) === this.normalizeEmail(row.userEmail)) {
+					protectedCount += 1;
+					continue;
+				}
+				accountRows.set(Number(row.accountId), row);
+			}
+
+			const usernameMatches = await this.findDeleteUsernameAssetRows(c, identity);
+			for (const row of usernameMatches) {
+				usernameAssetRows.set(Number(row.usernameAssetId), row);
+			}
+		}
+
+		const accountIds = [...accountRows.keys()].filter(Boolean);
+		const usernameAssetIds = [...usernameAssetRows.keys()].filter(Boolean);
+		const emails = [...new Set([...accountRows.values()]
+			.map(row => this.normalizeEmail(row.email))
+			.filter(Boolean))];
+		const now = dayjs().format(DATE_FORMAT);
+
+		if (accountIds.length > 0) {
+			const placeholders = accountIds.map(() => '?').join(',');
+			await c.env.db.prepare(`UPDATE account SET is_del = ? WHERE account_id IN (${placeholders})`)
+				.bind(isDel.DELETE, ...accountIds)
+				.run();
+			await Promise.all(emails.map(email => c.env.kv.delete(KvConst.SUB_ACCOUNT_TOKEN + email)));
+		}
+
+		if (usernameAssetIds.length > 0) {
+			const placeholders = usernameAssetIds.map(() => '?').join(',');
+			await c.env.db.prepare(`UPDATE username_asset SET is_del = ?, update_time = ? WHERE username_asset_id IN (${placeholders})`)
+				.bind(isDel.DELETE, now, ...usernameAssetIds)
+				.run();
+		}
+
+		return {
+			requested: items.length,
+			deleted: accountIds.length + usernameAssetIds.length,
+			accountDeleted: accountIds.length,
+			subAccountDeleted: accountIds.length,
+			usernameAssetDeleted: usernameAssetIds.length,
+			tokensDeleted: emails.length,
+			protected: protectedCount,
+			skipped
+		};
+	},
+
+	buildDeleteIdentity(item = {}) {
+		return {
+			email: this.normalizeEmail(
+				item.email || item.currentEmail || item.current_email || item.toEmail || item.mail || item.mailbox || item.loginAccount || item.login_account
+			),
+			username: this.normalizeTikTokUsername(
+				item.tiktokUsername || item.username || item.primaryUsername || item.primary_username
+			),
+			bitBrowserId: this.cleanText(
+				item.bitBrowserId || item.bit_browser_id || item.browserId || item.browser_id || item.id
+			),
+			windowName: this.cleanText(
+				item.windowName || item.window_name || item.browserName || item.browser_name || item.name
+			)
+		};
+	},
+
+	async findDeleteAccountRows(c, identity) {
+		const conditions = [];
+		const binds = [isDel.NORMAL];
+		if (identity.bitBrowserId) {
+			conditions.push('a.bit_browser_id = ?');
+			binds.push(identity.bitBrowserId);
+		}
+		if (identity.email) {
+			conditions.push('a.email COLLATE NOCASE = ?');
+			binds.push(identity.email);
+		}
+		if (identity.username && identity.windowName) {
+			conditions.push('(LOWER(a.tiktok_username) = LOWER(?) AND LOWER(a.window_name) = LOWER(?))');
+			binds.push(identity.username, identity.windowName);
+		} else if (identity.windowName) {
+			conditions.push('LOWER(a.window_name) = LOWER(?)');
+			binds.push(identity.windowName);
+		}
+		if (conditions.length === 0) {
+			return [];
+		}
+
+		const { results } = await c.env.db.prepare(`
+			SELECT
+				a.account_id AS accountId,
+				a.email,
+				a.window_name AS windowName,
+				a.tiktok_username AS tiktokUsername,
+				a.bit_browser_id AS bitBrowserId,
+				u.email AS userEmail
+			FROM account a
+			LEFT JOIN user u ON u.user_id = a.user_id
+			WHERE a.is_del = ? AND (${conditions.join(' OR ')})
+			LIMIT 50
+		`).bind(...binds).all();
+		return results || [];
+	},
+
+	async findDeleteUsernameAssetRows(c, identity) {
+		const conditions = [];
+		const binds = [isDel.NORMAL];
+		if (identity.bitBrowserId) {
+			conditions.push('bit_browser_id = ?');
+			binds.push(identity.bitBrowserId);
+		}
+		if (identity.username && identity.windowName) {
+			conditions.push('(LOWER(tiktok_username) = LOWER(?) AND LOWER(window_name) = LOWER(?))');
+			binds.push(identity.username, identity.windowName);
+		} else if (identity.windowName) {
+			conditions.push('LOWER(window_name) = LOWER(?)');
+			binds.push(identity.windowName);
+		}
+		if (conditions.length === 0) {
+			return [];
+		}
+
+		const { results } = await c.env.db.prepare(`
+			SELECT
+				username_asset_id AS usernameAssetId,
+				tiktok_username AS tiktokUsername,
+				window_name AS windowName,
+				bit_browser_id AS bitBrowserId
+			FROM username_asset
+			WHERE is_del = ? AND (${conditions.join(' OR ')})
+			LIMIT 50
+		`).bind(...binds).all();
+		return results || [];
+	},
+
 	async syncOneAccount(c, item, defaultCreateIfMissing) {
+		await this.ensureAssetIdentitySchema(c);
 		const email = this.normalizeEmail(item.email || item.currentEmail || item.toEmail);
 		if (!email) {
-			return { action: 'skipped', reason: 'missing_email' };
+			return this.syncUsernameAsset(c, item, defaultCreateIfMissing);
 		}
 		this.verifyEmail(c, email);
 
@@ -258,6 +416,7 @@ const localAgentService = {
 				account_id AS accountId,
 				email,
 				name,
+				window_name AS windowName,
 				tiktok_username AS tiktokUsername,
 				matrix_account_id AS matrixAccountId,
 				bit_browser_id AS bitBrowserId,
@@ -294,6 +453,7 @@ const localAgentService = {
 				INSERT INTO account (
 					email,
 					name,
+					window_name,
 					tiktok_username,
 					matrix_account_id,
 					bit_browser_id,
@@ -309,6 +469,7 @@ const localAgentService = {
 			`).bind(
 				email,
 				emailUtils.getName(email),
+				values.windowName,
 				values.tiktokUsername,
 				values.matrixAccountId,
 				values.bitBrowserId,
@@ -332,6 +493,7 @@ const localAgentService = {
 		await c.env.db.prepare(`
 			UPDATE account
 			SET
+				window_name = ?,
 				tiktok_username = ?,
 				matrix_account_id = ?,
 				bit_browser_id = ?,
@@ -344,6 +506,7 @@ const localAgentService = {
 				is_del = ?
 			WHERE account_id = ?
 		`).bind(
+			values.windowName,
 			values.tiktokUsername,
 			values.matrixAccountId,
 			values.bitBrowserId,
@@ -364,6 +527,190 @@ const localAgentService = {
 		};
 	},
 
+	async syncUsernameAsset(c, item, defaultCreateIfMissing) {
+		const username = this.normalizeTikTokUsername(
+			item.tiktokUsername || item.username || item.primaryUsername || item.primary_username
+		);
+		const windowName = this.cleanText(item.windowName || item.window_name || item.browserName || item.browser_name || item.name);
+		const bitBrowserId = this.cleanText(item.bitBrowserId || item.bit_browser_id || item.browserId || item.browser_id);
+		const createIfMissing = this.resolveCreateIfMissing(item, defaultCreateIfMissing);
+		if (!username && !windowName && !bitBrowserId) {
+			return { action: 'skipped', reason: 'missing_identity' };
+		}
+
+		let existing = null;
+		if (bitBrowserId) {
+			existing = await c.env.db.prepare(`
+				SELECT
+					username_asset_id AS usernameAssetId,
+					tiktok_username AS tiktokUsername,
+					window_name AS windowName,
+					matrix_account_id AS matrixAccountId,
+					bit_browser_id AS bitBrowserId,
+					group_name AS groupName,
+					tiktok_followers AS tiktokFollowers,
+					tiktok_views AS tiktokViews,
+					tiktok_views_text AS tiktokViewsText,
+					login_status AS loginStatus,
+					last_agent_sync_at AS lastAgentSyncAt,
+					last_stats_sync_at AS lastStatsSyncAt,
+					is_del AS isDel
+				FROM username_asset
+				WHERE bit_browser_id = ?
+				LIMIT 1
+			`).bind(bitBrowserId).first();
+		}
+		if (!existing && username && windowName) {
+			existing = await c.env.db.prepare(`
+				SELECT
+					username_asset_id AS usernameAssetId,
+					tiktok_username AS tiktokUsername,
+					window_name AS windowName,
+					matrix_account_id AS matrixAccountId,
+					bit_browser_id AS bitBrowserId,
+					group_name AS groupName,
+					tiktok_followers AS tiktokFollowers,
+					tiktok_views AS tiktokViews,
+					tiktok_views_text AS tiktokViewsText,
+					login_status AS loginStatus,
+					last_agent_sync_at AS lastAgentSyncAt,
+					last_stats_sync_at AS lastStatsSyncAt,
+					is_del AS isDel
+				FROM username_asset
+				WHERE LOWER(tiktok_username) = LOWER(?)
+				  AND LOWER(window_name) = LOWER(?)
+				LIMIT 1
+			`).bind(username, windowName).first();
+		}
+		if (!existing && username && !bitBrowserId && !windowName) {
+			const { results } = await c.env.db.prepare(`
+				SELECT
+					username_asset_id AS usernameAssetId,
+					tiktok_username AS tiktokUsername,
+					window_name AS windowName,
+					matrix_account_id AS matrixAccountId,
+					bit_browser_id AS bitBrowserId,
+					group_name AS groupName,
+					tiktok_followers AS tiktokFollowers,
+					tiktok_views AS tiktokViews,
+					tiktok_views_text AS tiktokViewsText,
+					login_status AS loginStatus,
+					last_agent_sync_at AS lastAgentSyncAt,
+					last_stats_sync_at AS lastStatsSyncAt,
+					is_del AS isDel
+				FROM username_asset
+				WHERE LOWER(tiktok_username) = LOWER(?)
+				LIMIT 2
+			`).bind(username).all();
+			if ((results || []).length === 1) {
+				existing = results[0];
+			}
+		}
+
+		if (existing && Number(existing.isDel) === isDel.DELETE && !createIfMissing) {
+			return { action: 'skipped', reason: 'username_asset_deleted', username, windowName, bitBrowserId };
+		}
+		if (!existing && !createIfMissing) {
+			return { action: 'skipped', reason: 'username_asset_not_found', username, windowName, bitBrowserId };
+		}
+
+		const now = dayjs().format(DATE_FORMAT);
+		const values = this.buildAccountSyncValues(
+			{
+				...item,
+				tiktokUsername: username,
+				windowName,
+				bitBrowserId
+			},
+			existing || {},
+			now
+		);
+
+		if (!existing || Number(existing.isDel) === isDel.DELETE) {
+			const insertResult = await c.env.db.prepare(`
+				INSERT INTO username_asset (
+					tiktok_username,
+					window_name,
+					matrix_account_id,
+					bit_browser_id,
+					group_name,
+					tiktok_followers,
+					tiktok_views,
+					tiktok_views_text,
+					login_status,
+					last_agent_sync_at,
+					last_stats_sync_at,
+					is_del,
+					update_time
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`).bind(
+				values.tiktokUsername,
+				values.windowName,
+				values.matrixAccountId,
+				values.bitBrowserId,
+				this.cleanText(item.groupName || item.group_name || '未分组'),
+				values.tiktokFollowers,
+				values.tiktokViews,
+				values.tiktokViewsText,
+				values.loginStatus,
+				now,
+				values.hasStats ? now : '',
+				isDel.NORMAL,
+				now
+			).run();
+
+			return {
+				action: 'created',
+				assetType: 'username_only',
+				username: values.tiktokUsername,
+				windowName: values.windowName,
+				usernameAssetId: insertResult.meta?.last_row_id || null
+			};
+		}
+
+		await c.env.db.prepare(`
+			UPDATE username_asset
+			SET
+				tiktok_username = ?,
+				window_name = ?,
+				matrix_account_id = ?,
+				bit_browser_id = ?,
+				group_name = ?,
+				tiktok_followers = ?,
+				tiktok_views = ?,
+				tiktok_views_text = ?,
+				login_status = ?,
+				last_agent_sync_at = ?,
+				last_stats_sync_at = ?,
+				is_del = ?,
+				update_time = ?
+			WHERE username_asset_id = ?
+		`).bind(
+			values.tiktokUsername,
+			values.windowName,
+			values.matrixAccountId,
+			values.bitBrowserId,
+			this.cleanText(item.groupName || item.group_name || existing.groupName || '未分组'),
+			values.tiktokFollowers,
+			values.tiktokViews,
+			values.tiktokViewsText,
+			values.loginStatus,
+			now,
+			values.hasStats ? now : (existing.lastStatsSyncAt || ''),
+			isDel.NORMAL,
+			now,
+			existing.usernameAssetId
+		).run();
+
+		return {
+			action: 'updated',
+			assetType: 'username_only',
+			username: values.tiktokUsername,
+			windowName: values.windowName,
+			usernameAssetId: existing.usernameAssetId
+		};
+	},
+
 	buildAccountSyncValues(item, existing, now) {
 		const username = this.normalizeTikTokUsername(
 			item.tiktokUsername || item.username || item.primaryUsername || item.primary_username
@@ -376,6 +723,7 @@ const localAgentService = {
 
 		return {
 			tiktokUsername: username || existing.tiktokUsername || '',
+			windowName: this.cleanText(item.windowName || item.window_name || item.browserName || item.browser_name || existing.windowName || ''),
 			matrixAccountId: this.cleanText(item.matrixAccountId || item.matrix_account_id || item.accountId || item.account_id || existing.matrixAccountId || ''),
 			bitBrowserId: this.cleanText(item.bitBrowserId || item.bit_browser_id || item.browserId || item.browser_id || existing.bitBrowserId || ''),
 			tiktokFollowers: shouldSyncStats && hasFollowers ? this.parseMetric(item.followers ?? item.fans ?? item.fansCurrent ?? item.fans_current ?? item.tiktokFollowers) : Number(existing.tiktokFollowers || 0),
@@ -385,6 +733,41 @@ const localAgentService = {
 			hasStats: shouldSyncStats,
 			now
 		};
+	},
+
+	async ensureAssetIdentitySchema(c) {
+		const statements = [
+			`ALTER TABLE account ADD COLUMN window_name TEXT NOT NULL DEFAULT '';`,
+			`CREATE TABLE IF NOT EXISTS username_asset (
+				username_asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
+				tiktok_username TEXT NOT NULL DEFAULT '',
+				window_name TEXT NOT NULL DEFAULT '',
+				matrix_account_id TEXT NOT NULL DEFAULT '',
+				bit_browser_id TEXT NOT NULL DEFAULT '',
+				group_name TEXT NOT NULL DEFAULT '',
+				tiktok_followers INTEGER NOT NULL DEFAULT 0,
+				tiktok_views INTEGER NOT NULL DEFAULT 0,
+				tiktok_views_text TEXT NOT NULL DEFAULT '',
+				login_status TEXT NOT NULL DEFAULT '',
+				last_agent_sync_at TEXT NOT NULL DEFAULT '',
+				last_stats_sync_at TEXT NOT NULL DEFAULT '',
+				create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+				update_time TEXT NOT NULL DEFAULT '',
+				is_del INTEGER DEFAULT 0 NOT NULL
+			);`,
+			`CREATE INDEX IF NOT EXISTS idx_username_asset_bit_browser_id ON username_asset(bit_browser_id);`,
+			`CREATE INDEX IF NOT EXISTS idx_username_asset_tiktok_username ON username_asset(tiktok_username);`,
+			`CREATE INDEX IF NOT EXISTS idx_account_window_name ON account(window_name);`
+		];
+		for (const statement of statements) {
+			try {
+				await c.env.db.prepare(statement).run();
+			} catch (e) {
+				if (!String(e?.message || '').toLowerCase().includes('duplicate column')) {
+					console.warn(`skip asset identity schema statement: ${e.message}`);
+				}
+			}
+		}
 	},
 
 	shouldSyncStats(item, existing, now) {

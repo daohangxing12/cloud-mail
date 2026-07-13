@@ -83,7 +83,7 @@
     />
   </div>
   <div class="empty-content" v-else>
-    <el-empty description="璇烽€夋嫨涓€灏侀偖浠?/>
+    <el-empty description="璇烽€夋嫨涓€灏侀偖浠?"/>
   </div>
 </template>
 <script setup>
@@ -270,7 +270,7 @@ const handleBlockSender = () => {
   const mail = currentEmail()
   if (!mail.emailId || !mail.sendEmail) return
 
-  ElMessageBox.confirm(`纭鎷夐粦 ${mail.sendEmail}锛熶互鍚庤繖涓彂浠朵汉鐨勯偖浠朵細杩涘叆鍨冨溇閭銆俙, {
+  ElMessageBox.confirm(`确认拉黑 ${mail.sendEmail}？以后这个发件人的邮件会进入垃圾邮箱。`, {
     confirmButtonText: t('confirm'),
     cancelButtonText: t('cancel'),
     type: 'warning'
@@ -294,7 +294,7 @@ const handleEnsureManagedMailbox = () => {
   const targetEmail = targetReceiveEmail.value
   if (!mail.emailId || !targetEmail) return
 
-  ElMessageBox.confirm(`纭鎶?${targetEmail} 鍒涘缓鍒拌祫浜?瀛愰偖绠辩鐞嗭紝骞跺噯澶囨帴鐮?Token锛焋, {
+  ElMessageBox.confirm(`确认把 ${targetEmail} 创建到资产 / 子邮箱管理，并准备接码 Token？`, {
     confirmButtonText: t('confirm'),
     cancelButtonText: t('cancel'),
     type: 'warning'
@@ -304,12 +304,12 @@ const handleEnsureManagedMailbox = () => {
       ensureToken: true
     }).then(data => {
       const actionText = {
-        created: '宸插垱寤?,
-        restored: '宸叉仮澶?,
-        existing: '宸插瓨鍦?
-      }[data.action] || '宸插鐞?
+        created: '已创建',
+        restored: '已恢复',
+        existing: '已存在'
+      }[data.action] || '已处理'
       ElMessage({
-        message: `${actionText}锛?{data.email}${data.generatedToken ? '锛屽凡鐢熸垚鎺ョ爜 Token' : ''}`,
+        message: `${actionText}：${data.email}${data.generatedToken ? '，已生成接码 Token' : ''}`,
         type: 'success',
         plain: true
       })

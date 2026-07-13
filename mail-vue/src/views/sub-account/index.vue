@@ -43,9 +43,10 @@
             :data="accounts"
             :empty-text="first ? '' : '暂无子邮箱'"
             style="width: 100%;"
+            @sort-change="sortChange"
         >
           <el-table-column width="42" type="selection" :selectable="row => !isOwnerAccount(row)"/>
-          <el-table-column label="子邮箱" min-width="230" show-overflow-tooltip>
+          <el-table-column prop="email" label="子邮箱" min-width="230" sortable="custom" show-overflow-tooltip>
             <template #default="props">
               <div class="email-cell">
                 <span>{{ props.row.email }}</span>
@@ -53,12 +54,12 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="域名" width="130">
+          <el-table-column prop="domain" label="域名" width="130" sortable="custom">
             <template #default="props">
               <el-tag size="small">{{ getDomain(props.row.email) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="备注" min-width="150" show-overflow-tooltip>
+          <el-table-column prop="name" label="备注" min-width="150" sortable="custom" show-overflow-tooltip>
             <template #default="props">
               <el-input
                   v-model="props.row.editName"
@@ -77,19 +78,19 @@
               <el-tag v-else type="info" disable-transitions>未设置</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="归属用户" min-width="210" show-overflow-tooltip>
+          <el-table-column prop="userEmail" label="归属用户" min-width="210" sortable="custom" show-overflow-tooltip>
             <template #default="props">
               <span>{{ props.row.userEmail || '-' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="90">
+          <el-table-column prop="isDel" label="状态" width="90" sortable="custom">
             <template #default="props">
               <el-tag v-if="props.row.isDel === 1" type="info" disable-transitions>已删除</el-tag>
               <el-tag v-else-if="props.row.status === 1" type="danger" disable-transitions>停用</el-tag>
               <el-tag v-else type="primary" disable-transitions>正常</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="TikTok" min-width="210">
+          <el-table-column prop="tiktokUsername" label="TikTok" min-width="210" sortable="custom">
             <template #default="props">
               <div class="tiktok-cell">
                 <el-input
@@ -114,7 +115,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="创建时间" min-width="155">
+          <el-table-column prop="createTime" label="创建时间" min-width="155" sortable="custom">
             <template #default="props">
               {{ formatTime(props.row.createTime) }}
             </template>
@@ -275,6 +276,8 @@ const params = reactive({
   userEmail: '',
   domain: '',
   isDel: 0,
+  sortBy: 'accountId',
+  sortOrder: 'desc',
   num: 1,
   size: 20
 })
@@ -356,6 +359,13 @@ function numChange(num) {
 
 function sizeChange(size) {
   params.size = size
+  params.num = 1
+  getList(true)
+}
+
+function sortChange({prop, order}) {
+  params.sortBy = prop || 'accountId'
+  params.sortOrder = order === 'ascending' ? 'asc' : 'desc'
   params.num = 1
   getList(true)
 }
