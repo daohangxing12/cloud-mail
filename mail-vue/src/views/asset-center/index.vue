@@ -681,7 +681,7 @@ function toggleAllPasswords() {
 }
 
 async function copySyncText(text) {
-  await navigator.clipboard.writeText(text)
+  await writeClipboardText(text)
   ElMessage({message: '\u590d\u5236\u6210\u529f', type: 'success', plain: true})
 }
 
@@ -717,27 +717,47 @@ async function exportTxt() {
     }
 
     const text = lines.join('\n')
-    const blob = new Blob([text], {type: 'text/plain;charset=utf-8'})
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `mail-assets-${new Date().toISOString().slice(0, 10)}.txt`
-    link.click()
-    URL.revokeObjectURL(url)
-
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch (error) {
-      // 复制失败不影响下载。
-    }
+    await writeClipboardText(text)
 
     ElMessage({
-      message: `导出完成：${lines.length} 条${createdCount > 0 ? `，自动创建 token ${createdCount} 个` : ''}${emptyCount > 0 ? `，${emptyCount} 条 token 为空` : ''}`,
+      message: `已复制 ${lines.length} 条${createdCount > 0 ? `，自动创建 token ${createdCount} 个` : ''}${emptyCount > 0 ? `，${emptyCount} 条 token 为空` : ''}`,
       type: 'success',
+      plain: true
+    })
+  } catch (error) {
+    ElMessage({
+      message: `导出失败：${error?.message || '复制失败'}`,
+      type: 'error',
       plain: true
     })
   } finally {
     exportLoading.value = false
+  }
+}
+
+async function writeClipboardText(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch (error) {
+      // 继续走兜底方案。
+    }
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', 'readonly')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const ok = document.execCommand('copy')
+  document.body.removeChild(textarea)
+
+  if (!ok) {
+    throw new Error('浏览器不支持复制')
   }
 }
 
