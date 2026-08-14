@@ -699,23 +699,19 @@ async function exportTxt() {
     }
 
     const parts = [firstText]
-    let createdCount = Number(first?.createdCount || 0)
-    let emptyCount = Number(first?.emptyCount || 0)
     for (let num = 2; num <= total; num++) {
       const data = await assetExportTxt({...params, num, size: pageSize})
       const pageText = String(data?.text || '')
       if (pageText) {
         parts.push(pageText)
       }
-      createdCount += Number(data?.createdCount || 0)
-      emptyCount += Number(data?.emptyCount || 0)
     }
 
     const text = parts.filter(Boolean).join('\n')
     await writeClipboardText(text)
 
     ElMessage({
-      message: `已复制 ${text.split('\n').filter(Boolean).length} 条${createdCount > 0 ? `，自动创建 token ${createdCount} 个` : ''}${emptyCount > 0 ? `，${emptyCount} 条 token 为空` : ''}`,
+      message: `已复制 ${text.split('\n').filter(Boolean).length} 条`,
       type: 'success',
       plain: true
     })

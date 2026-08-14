@@ -285,25 +285,13 @@ const assetService = {
 
 		const list = await Promise.all((results || []).map(row => this.toAssetRow(c, row)));
 		const lines = [];
-		let createdCount = 0;
-		let emptyCount = 0;
 		const batchSize = 30;
 
 		for (let index = 0; index < list.length; index += batchSize) {
 			const chunk = list.slice(index, index + batchSize);
 			const chunkLines = await Promise.all(chunk.map(async row => {
 				const tokenKey = subAccountService.tokenKey(row.email);
-				let token = await c.env.kv.get(tokenKey);
-				if (!token) {
-					token = globalThis.crypto?.randomUUID?.().replaceAll('-', '') || '';
-					if (token) {
-						await c.env.kv.put(tokenKey, token);
-						createdCount += 1;
-					}
-				}
-				if (!token) {
-					emptyCount += 1;
-				}
+				const token = await c.env.kv.get(tokenKey);
 				return [
 					row.tiktokUsername || '',
 					row.password || '',
@@ -317,8 +305,6 @@ const assetService = {
 		return {
 			text: lines.join('\n'),
 			total: lines.length,
-			createdCount,
-			emptyCount,
 			num,
 			size,
 			pageTotal: Math.ceil(Number(countRow?.total || 0) / size)
