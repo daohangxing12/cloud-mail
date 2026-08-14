@@ -688,17 +688,34 @@ async function exportTxt() {
   if (exportLoading.value) return
   exportLoading.value = true
   try {
-    const data = await assetExportTxt({...params})
-    const text = String(data?.text || '')
-    if (!text) {
+    const pageSize = 20
+    const first = await assetExportTxt({...params, num: 1, size: pageSize})
+    const total = Number(first?.pageTotal || 0)
+    const firstText = String(first?.text || '')
+
+    if (Number(first?.total || 0) === 0) {
       ElMessage({message: '没有可导出的资产', type: 'warning', plain: true})
       return
     }
 
+    const parts = [firstText]
+    let createdCount = Number(first?.createdCount || 0)
+    let emptyCount = Number(first?.emptyCount || 0)
+    for (let num = 2; num <= total; num++) {
+      const data = await assetExportTxt({...params, num, size: pageSize})
+      const pageText = String(data?.text || '')
+      if (pageText) {
+        parts.push(pageText)
+      }
+      createdCount += Number(data?.createdCount || 0)
+      emptyCount += Number(data?.emptyCount || 0)
+    }
+
+    const text = parts.filter(Boolean).join('\n')
     await writeClipboardText(text)
 
     ElMessage({
-      message: `已复制 ${Number(data?.total || 0)} 条${Number(data?.createdCount || 0) > 0 ? `，自动创建 token ${data.createdCount} 个` : ''}${Number(data?.emptyCount || 0) > 0 ? `，${data.emptyCount} 条 token 为空` : ''}`,
+      message: `已复制 ${text.split('\n').filter(Boolean).length} 条${createdCount > 0 ? `，自动创建 token ${createdCount} 个` : ''}${emptyCount > 0 ? `，${emptyCount} 条 token 为空` : ''}`,
       type: 'success',
       plain: true
     })

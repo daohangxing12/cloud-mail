@@ -229,9 +229,19 @@ const assetService = {
 	},
 
 	async exportTxt(c, params = {}, user) {
+		const num = this.clampNumber(params.num, 1, 1, 999999);
+		const size = this.clampNumber(params.size, 20, 1, 20);
+		const offset = (num - 1) * size;
 		const filter = this.assetFilter(c, params, user);
 		const orderSql = this.orderSql(params);
-		const { results } = await c.env.db.prepare(`
+		const [countRow, { results }] = await Promise.all([
+			c.env.db.prepare(`
+				SELECT COUNT(*) AS total
+				FROM account a
+				LEFT JOIN user u ON u.user_id = a.user_id
+				${filter.sql}
+			`).bind(...filter.binds).first(),
+			c.env.db.prepare(`
 			SELECT
 				a.account_id AS accountId,
 				a.email,
@@ -269,7 +279,9 @@ const assetService = {
 			LEFT JOIN user u ON u.user_id = a.user_id
 			${filter.sql}
 			${orderSql}
-		`).bind(...filter.binds).all();
+			LIMIT ? OFFSET ?
+		`).bind(...filter.binds, size, offset).all()
+		]);
 
 		const list = await Promise.all((results || []).map(row => this.toAssetRow(c, row)));
 		const lines = [];
@@ -306,7 +318,10 @@ const assetService = {
 			text: lines.join('\n'),
 			total: lines.length,
 			createdCount,
-			emptyCount
+			emptyCount,
+			num,
+			size,
+			pageTotal: Math.ceil(Number(countRow?.total || 0) / size)
 		};
 	},
 
