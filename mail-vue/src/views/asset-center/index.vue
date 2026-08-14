@@ -80,7 +80,10 @@
         </el-button>
         <Icon class="tool-icon" icon="iconoir:search" width="20" height="20" @click="search" />
         <Icon class="tool-icon" icon="ion:reload" width="18" height="18" @click="refresh" />
-        <Icon class="tool-icon" icon="ph:export" width="21" height="21" @click="exportCsv" />
+        <el-button class="sync-button export-button" type="primary" :loading="exportLoading" @click="exportTxt">
+          <Icon icon="ph:export" width="20" height="20" />
+          一键导出 TXT
+        </el-button>
         <el-button class="sync-button" type="danger" plain :disabled="selectedDeletableRows.length === 0" :loading="batchLoading" @click="deleteSelectedAssets">
           删除选中
         </el-button>
@@ -310,6 +313,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {Icon} from '@iconify/vue'
 import {useSettingStore} from '@/store/setting.js'
 import {assetBatchStatus, assetList, assetScanCreatorRewards, assetScanTikTokInbox, assetUpdate} from '@/request/asset.js'
+import {subAccountGenToken, subAccountGetToken} from '@/request/sub-account.js'
 import {tzDayjs} from '@/utils/day.js'
 
 defineOptions({
@@ -326,6 +330,7 @@ const loading = ref(false)
 const scanLoading = ref(false)
 const scanTikTokLoading = ref(false)
 const batchLoading = ref(false)
+const exportLoading = ref(false)
 const syncDialogShow = ref(false)
 const showAllPasswords = ref(false)
 const scrollbarRef = ref(null)
@@ -680,35 +685,85 @@ async function copySyncText(text) {
   ElMessage({message: '\u590d\u5236\u6210\u529f', type: 'success', plain: true})
 }
 
-async function exportCsv() {
-  const allRows = await loadAllRows()
-  if (allRows.length === 0) {
-    ElMessage({message: '没有可导出的资产', type: 'warning', plain: true})
-    return
+async function exportTxt() {
+  if (exportLoading.value) return
+  exportLoading.value = true
+  try {
+    const allRows = await loadAllRows()
+    if (allRows.length === 0) {
+      ElMessage({message: '没有可导出的资产', type: 'warning', plain: true})
+      return
+    }
+
+    const lines = []
+    let createdCount = 0
+    let emptyCount = 0
+
+    const batchSize = 12
+    for (let index = 0; index < allRows.length; index += batchSize) {
+      const chunk = allRows.slice(index, index + batchSize)
+      const chunkLines = await Promise.all(chunk.map(async row => {
+        const tokenInfo = await ensureExportToken(row)
+        if (tokenInfo.created) createdCount += 1
+        if (!tokenInfo.token) emptyCount += 1
+        return [
+          row.tiktokUsername || '',
+          row.password || '',
+          row.email || '',
+          buildJsonCodeUrl(row.email, tokenInfo.token)
+        ].join('----')
+      }))
+      lines.push(...chunkLines)
+    }
+
+    const text = lines.join('\n')
+    const blob = new Blob([text], {type: 'text/plain;charset=utf-8'})
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `mail-assets-${new Date().toISOString().slice(0, 10)}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch (error) {
+      // 复制失败不影响下载。
+    }
+
+    ElMessage({
+      message: `导出完成：${lines.length} 条${createdCount > 0 ? `，自动创建 token ${createdCount} 个` : ''}${emptyCount > 0 ? `，${emptyCount} 条 token 为空` : ''}`,
+      type: 'success',
+      plain: true
+    })
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+async function ensureExportToken(row) {
+  if (!row?.accountId) return {token: '', created: false}
+
+  const tokenData = await subAccountGetToken(row.accountId).catch(() => null)
+  if (tokenData?.token) {
+    return {token: tokenData.token, created: false}
   }
 
-  const headers = ['邮箱', '域名', '窗口名', 'TikTok用户名', '密码', '设备号', '粉丝', '播放', '中视频状态', '比特分组', '备注']
-  const body = allRows.map(row => [
-    row.email,
-    row.domain,
-    row.windowName || '',
-    row.tiktokUsername || '',
-    row.password || '',
-    row.deviceNo || '',
-    row.tiktokFollowers || 0,
-    row.tiktokViews || 0,
-    row.creatorStatus || '',
-    row.bitGroupName || '',
-    row.name || ''
-  ])
-  const csv = [headers, ...body].map(row => row.map(csvEscape).join(',')).join('\n')
-  const blob = new Blob([`\ufeff${csv}`], {type: 'text/csv;charset=utf-8'})
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `mail-assets-${new Date().toISOString().slice(0, 10)}.csv`
-  link.click()
-  URL.revokeObjectURL(url)
+  const createdData = await subAccountGenToken(row.accountId).catch(() => null)
+  if (createdData?.token) {
+    return {token: createdData.token, created: true}
+  }
+
+  return {token: '', created: false}
+}
+
+function buildJsonCodeUrl(email, token) {
+  const query = new URLSearchParams({
+    username: email,
+    token,
+    format: 'json'
+  })
+  return `${window.location.origin}/getNewTkMailCode?${query.toString()}`
 }
 
 async function loadAllRows() {
@@ -820,6 +875,15 @@ function csvEscape(value) {
 
 .sync-button {
   height: 32px;
+}
+
+.export-button {
+  min-width: 182px;
+  height: 40px;
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(64, 158, 255, 0.18);
 }
 
 .tool-icon {
