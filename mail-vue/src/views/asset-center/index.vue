@@ -304,6 +304,29 @@
         </div>
       </div>
     </el-dialog>
+
+    <el-dialog v-model="exportDialogShow" class="export-dialog" title="导出邮箱资产 TXT">
+      <div class="export-result">
+        <p>{{ exportScope }}，共 {{ exportCount }} 条。可在下方选择文字，也可以直接复制或下载。</p>
+        <el-input
+            :model-value="exportText"
+            type="textarea"
+            readonly
+            resize="vertical"
+            :rows="16"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="copyExportText">
+          <Icon icon="ph:copy" width="18" height="18" />
+          复制
+        </el-button>
+        <el-button type="primary" @click="downloadExportTxt">
+          <Icon icon="ph:download-simple" width="18" height="18" />
+          下载 TXT
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -331,6 +354,10 @@ const scanTikTokLoading = ref(false)
 const batchLoading = ref(false)
 const exportLoading = ref(false)
 const syncDialogShow = ref(false)
+const exportDialogShow = ref(false)
+const exportText = ref('')
+const exportCount = ref(0)
+const exportScope = ref('')
 const showAllPasswords = ref(false)
 const scrollbarRef = ref(null)
 const tableRef = ref(null)
@@ -689,18 +716,22 @@ async function exportTxt() {
   exportLoading.value = true
   try {
     const pageSize = 20
-    const first = await assetExportTxt({...params, num: 1, size: pageSize})
-    const total = Number(first?.pageTotal || 0)
+    const accountIds = selectedRows.value
+        .map(row => Number(row.accountId))
+        .filter(accountId => Number.isInteger(accountId) && accountId > 0)
+    const exportParams = accountIds.length > 0 ? {...params, accountIds} : {...params}
+    const first = await assetExportTxt({...exportParams, num: 1, size: pageSize})
+    const pageTotal = Number(first?.pageTotal || 0)
     const firstText = String(first?.text || '')
 
-    if (Number(first?.total || 0) === 0) {
+    if (!firstText) {
       ElMessage({message: '没有可导出的资产', type: 'warning', plain: true})
       return
     }
 
     const parts = [firstText]
-    for (let num = 2; num <= total; num++) {
-      const data = await assetExportTxt({...params, num, size: pageSize})
+    for (let num = 2; num <= pageTotal; num++) {
+      const data = await assetExportTxt({...exportParams, num, size: pageSize})
       const pageText = String(data?.text || '')
       if (pageText) {
         parts.push(pageText)
@@ -708,22 +739,42 @@ async function exportTxt() {
     }
 
     const text = parts.filter(Boolean).join('\n')
-    await writeClipboardText(text)
-
-    ElMessage({
-      message: `已复制 ${text.split('\n').filter(Boolean).length} 条`,
-      type: 'success',
-      plain: true
-    })
+    exportText.value = text
+    exportCount.value = text.split('\n').filter(Boolean).length
+    exportScope.value = accountIds.length > 0 ? '已勾选的邮箱' : '当前筛选结果'
+    exportDialogShow.value = true
   } catch (error) {
     ElMessage({
-      message: `导出失败：${error?.message || '复制失败'}`,
+      message: `导出失败：${error?.message || '请稍后重试'}`,
       type: 'error',
       plain: true
     })
   } finally {
     exportLoading.value = false
   }
+}
+
+async function copyExportText() {
+  if (!exportText.value) return
+  try {
+    await writeClipboardText(exportText.value)
+    ElMessage({message: `已复制 ${exportCount.value} 条`, type: 'success', plain: true})
+  } catch (error) {
+    ElMessage({message: `复制失败：${error?.message || '请使用下载 TXT'}`, type: 'error', plain: true})
+  }
+}
+
+function downloadExportTxt() {
+  if (!exportText.value) return
+  const blob = new Blob(['\ufeff', exportText.value], {type: 'text/plain;charset=utf-8'})
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `mail-assets-${tzDayjs().format('YYYY-MM-DD')}.txt`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 async function writeClipboardText(text) {
@@ -1015,6 +1066,25 @@ function csvEscape(value) {
 
 :deep(.sync-dialog) {
   width: min(720px, calc(100vw - 34px));
+}
+
+:deep(.export-dialog) {
+  width: min(760px, calc(100vw - 34px));
+}
+
+.export-result {
+  display: grid;
+  gap: 12px;
+
+  p {
+    margin: 0;
+    color: var(--el-text-color-secondary);
+  }
+
+  :deep(textarea) {
+    font-family: Consolas, "Courier New", monospace;
+    line-height: 1.55;
+  }
 }
 
 @media (max-width: 860px) {

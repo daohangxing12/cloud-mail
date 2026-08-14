@@ -453,6 +453,18 @@ const assetService = {
 			binds.push(user.userId);
 		}
 
+		const hasAccountIds = ['accountIds', 'account_ids', 'ids', 'accountId', 'account_id']
+			.some(key => Object.prototype.hasOwnProperty.call(params, key));
+		if (hasAccountIds) {
+			const accountIds = this.parseIdList(params.accountIds || params.account_ids || params.ids || params.accountId || params.account_id);
+			if (accountIds.length === 0) {
+				conditions.push('1 = 0');
+			} else {
+				conditions.push(`a.account_id IN (${accountIds.map(() => '?').join(',')})`);
+				binds.push(...accountIds);
+			}
+		}
+
 		const domain = this.normalizeDomain(params.domain);
 		if (domain) {
 			conditions.push("LOWER(SUBSTR(a.email, INSTR(a.email, '@') + 1)) = LOWER(?)");
