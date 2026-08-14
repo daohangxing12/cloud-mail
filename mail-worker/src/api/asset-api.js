@@ -16,6 +16,11 @@ app.get('/asset/list', async (c) => {
 	return c.json(result.ok(data));
 });
 
+app.post('/asset/exportTxt', async (c) => {
+	const data = await assetService.exportTxt(c, await c.req.json(), userContext.getUser(c));
+	return c.json(result.ok(data));
+});
+
 app.put('/asset/update', async (c) => {
 	const data = await assetService.update(c, await c.req.json(), userContext.getUser(c));
 	return c.json(result.ok(data));

@@ -2,6 +2,7 @@ import BizError from '../error/biz-error';
 import emailUtils from '../utils/email-utils';
 import { isDel } from '../const/entity-const';
 import { CREATOR_STATUS } from './creator-rewards-service';
+import subAccountService from './sub-account-service';
 import { decryptSecret, encryptSecret } from '../utils/secret-utils';
 import dayjs from 'dayjs';
 
@@ -224,6 +225,88 @@ const assetService = {
 			total: Number(countRow?.total || 0),
 			num,
 			size
+		};
+	},
+
+	async exportTxt(c, params = {}, user) {
+		const filter = this.assetFilter(c, params, user);
+		const orderSql = this.orderSql(params);
+		const { results } = await c.env.db.prepare(`
+			SELECT
+				a.account_id AS accountId,
+				a.email,
+				a.name,
+				a.window_name AS windowName,
+				a.bit_group_name AS bitGroupName,
+				a.password AS password,
+				a.tiktok_username AS tiktokUsername,
+				a.matrix_account_id AS matrixAccountId,
+				a.bit_browser_id AS bitBrowserId,
+				a.tiktok_followers AS tiktokFollowers,
+				a.tiktok_views AS tiktokViews,
+				a.tiktok_views_text AS tiktokViewsText,
+				a.creator_rewards_status AS creatorStatus,
+				a.creator_rewards_username AS creatorRewardsUsername,
+				a.creator_rewards_joined_at AS creatorRewardsJoinedAt,
+				a.creator_rewards_rejected_at AS creatorRewardsRejectedAt,
+				a.creator_rewards_retry_at AS creatorRewardsRetryAt,
+				a.creator_rewards_last_checked_at AS creatorRewardsLastCheckedAt,
+				a.creator_rewards_email_id AS creatorRewardsEmailId,
+				a.creator_rewards_subject AS creatorRewardsSubject,
+				a.creator_rewards_baseline_followers AS creatorRewardsBaselineFollowers,
+				a.creator_rewards_baseline_views AS creatorRewardsBaselineViews,
+				a.device_no AS deviceNo,
+				a.login_status AS loginStatus,
+				a.last_agent_sync_at AS lastAgentSyncAt,
+				a.last_stats_sync_at AS lastStatsSyncAt,
+				a.status,
+				a.latest_email_time AS latestEmailTime,
+				a.create_time AS createTime,
+				a.user_id AS userId,
+				a.is_del AS isDel,
+				u.email AS userEmail
+			FROM account a
+			LEFT JOIN user u ON u.user_id = a.user_id
+			${filter.sql}
+			${orderSql}
+		`).bind(...filter.binds).all();
+
+		const list = await Promise.all((results || []).map(row => this.toAssetRow(c, row)));
+		const lines = [];
+		let createdCount = 0;
+		let emptyCount = 0;
+		const batchSize = 30;
+
+		for (let index = 0; index < list.length; index += batchSize) {
+			const chunk = list.slice(index, index + batchSize);
+			const chunkLines = await Promise.all(chunk.map(async row => {
+				const tokenKey = subAccountService.tokenKey(row.email);
+				let token = await c.env.kv.get(tokenKey);
+				if (!token) {
+					token = globalThis.crypto?.randomUUID?.().replaceAll('-', '') || '';
+					if (token) {
+						await c.env.kv.put(tokenKey, token);
+						createdCount += 1;
+					}
+				}
+				if (!token) {
+					emptyCount += 1;
+				}
+				return [
+					row.tiktokUsername || '',
+					row.password || '',
+					row.email || '',
+					token || ''
+				].join('----');
+			}));
+			lines.push(...chunkLines);
+		}
+
+		return {
+			text: lines.join('\n'),
+			total: lines.length,
+			createdCount,
+			emptyCount
 		};
 	},
 

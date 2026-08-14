@@ -23,3 +23,7 @@ export function assetScanCreatorRewards(params) {
 export function assetScanTikTokInbox(params) {
     return http.post('/asset/tiktok/scanInbox', params);
 }
+
+export function assetExportTxt(params) {
+    return http.post('/asset/exportTxt', params)
+}

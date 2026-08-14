@@ -312,8 +312,7 @@ import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {Icon} from '@iconify/vue'
 import {useSettingStore} from '@/store/setting.js'
-import {assetBatchStatus, assetList, assetScanCreatorRewards, assetScanTikTokInbox, assetUpdate} from '@/request/asset.js'
-import {subAccountGenToken, subAccountGetToken} from '@/request/sub-account.js'
+import {assetBatchStatus, assetExportTxt, assetList, assetScanCreatorRewards, assetScanTikTokInbox, assetUpdate} from '@/request/asset.js'
 import {tzDayjs} from '@/utils/day.js'
 
 defineOptions({
@@ -689,38 +688,17 @@ async function exportTxt() {
   if (exportLoading.value) return
   exportLoading.value = true
   try {
-    const allRows = await loadAllRows()
-    if (allRows.length === 0) {
+    const data = await assetExportTxt({...params})
+    const text = String(data?.text || '')
+    if (!text) {
       ElMessage({message: '没有可导出的资产', type: 'warning', plain: true})
       return
     }
 
-    const lines = []
-    let createdCount = 0
-    let emptyCount = 0
-
-    const batchSize = 12
-    for (let index = 0; index < allRows.length; index += batchSize) {
-      const chunk = allRows.slice(index, index + batchSize)
-      const chunkLines = await Promise.all(chunk.map(async row => {
-        const tokenInfo = await ensureExportToken(row)
-        if (tokenInfo.created) createdCount += 1
-        if (!tokenInfo.token) emptyCount += 1
-        return [
-          row.tiktokUsername || '',
-          row.password || '',
-          row.email || '',
-          buildJsonCodeUrl(row.email, tokenInfo.token)
-        ].join('----')
-      }))
-      lines.push(...chunkLines)
-    }
-
-    const text = lines.join('\n')
     await writeClipboardText(text)
 
     ElMessage({
-      message: `已复制 ${lines.length} 条${createdCount > 0 ? `，自动创建 token ${createdCount} 个` : ''}${emptyCount > 0 ? `，${emptyCount} 条 token 为空` : ''}`,
+      message: `已复制 ${Number(data?.total || 0)} 条${Number(data?.createdCount || 0) > 0 ? `，自动创建 token ${data.createdCount} 个` : ''}${Number(data?.emptyCount || 0) > 0 ? `，${data.emptyCount} 条 token 为空` : ''}`,
       type: 'success',
       plain: true
     })
@@ -759,43 +737,6 @@ async function writeClipboardText(text) {
   if (!ok) {
     throw new Error('浏览器不支持复制')
   }
-}
-
-async function ensureExportToken(row) {
-  if (!row?.accountId) return {token: '', created: false}
-
-  const tokenData = await subAccountGetToken(row.accountId).catch(() => null)
-  if (tokenData?.token) {
-    return {token: tokenData.token, created: false}
-  }
-
-  const createdData = await subAccountGenToken(row.accountId).catch(() => null)
-  if (createdData?.token) {
-    return {token: createdData.token, created: true}
-  }
-
-  return {token: '', created: false}
-}
-
-function buildJsonCodeUrl(email, token) {
-  const query = new URLSearchParams({
-    username: email,
-    token,
-    format: 'json'
-  })
-  return `${window.location.origin}/getNewTkMailCode?${query.toString()}`
-}
-
-async function loadAllRows() {
-  const query = {...params, num: 1, size: 100}
-  const first = await assetList(query)
-  const list = [...(first.list || [])]
-  const pageCount = Math.ceil((first.total || 0) / 100)
-  for (let num = 2; num <= pageCount; num++) {
-    const data = await assetList({...query, num})
-    list.push(...(data.list || []))
-  }
-  return list
 }
 
 function loginTagType(value) {
