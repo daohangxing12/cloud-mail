@@ -19,6 +19,21 @@
 
 `E:\NTMCN_MAIN\cloud-mail`
 
+## 唯一发布链路
+
+- 本地唯一源码 -> GitHub `main` -> Cloudflare 自动发布。
+- Cloudflare 只接受 GitHub `main` 的发布结果，不允许单独在 CF 上手改版本。
+- 本地开发只允许围绕 `E:\NTMCN_MAIN\cloud-mail` 继续升级，不允许回头混用旧目录、归档目录或临时目录。
+- GitHub `main` 是唯一可对外发布的源码基线，其他分支只能做临时验证，不能直接作为正式发布源。
+
+## 版本错乱兜底
+
+- 如果发现页面、版本号、线上行为和本地源码不一致，先停止继续改功能。
+- 先确认本地提交、GitHub `main` 和 Cloudflare 当前版本是否一致。
+- 任何回退都优先回到 `28fcf4fe-1d6f-4e9e-b844-7675baf2d1fb` 这条基线，再继续升级。
+- 恢复顺序优先级：先本地源码对齐，再 GitHub `main` 对齐，最后 Cloudflare 对齐。
+- 未确认三方一致之前，不允许继续追加新功能。
+
 ## 禁止事项
 
 - 禁止从旧 cloud-mail 目录复制文件覆盖当前源码。

@@ -134,6 +134,7 @@ const subAccountService = {
 				a.account_id AS accountId,
 				a.email,
 				a.name,
+				a.password AS password,
 				a.tiktok_username AS tiktokUsername,
 				a.creator_rewards_status AS creatorStatus,
 				a.creator_rewards_retry_at AS creatorRewardsRetryAt,
@@ -298,7 +299,8 @@ const subAccountService = {
 		const values = await Promise.all(rows.map(row => c.env.kv.get(this.tokenKey(row.email))));
 		return rows.map((row, index) => ({
 			...row,
-			hasToken: !!values[index]
+			hasToken: !!values[index],
+			token: values[index] || ''
 		}));
 	},
 

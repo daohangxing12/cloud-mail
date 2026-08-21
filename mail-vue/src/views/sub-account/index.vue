@@ -25,6 +25,7 @@
       <Icon class="icon" icon="iconoir:search" width="20" height="20" title="搜索" @click="search"/>
       <Icon class="icon" icon="ion:reload" width="18" height="18" title="刷新" @click="refresh"/>
       <Icon class="icon" icon="ph:export" width="21" height="21" title="导出 CSV" @click="exportCsv"/>
+      <Icon class="icon" icon="ph:file-txt" width="21" height="21" title="导出 TXT（复制并下载）" @click="exportTxt"/>
       <Icon class="icon danger" icon="uiw:delete" width="16" height="16" title="删除选中" @click="deleteSelected"/>
     </div>
 
@@ -348,7 +349,8 @@ function getList(showLoading = false) {
       editCreatorStatus: row.creatorStatus || '',
       savingTiktok: false,
       savingCreatorStatus: false,
-      token: ''
+      password: row.password || '',
+      token: row.token || ''
     }))
     total.value = data.total || 0
     scrollbarRef.value?.setScrollTop(0)
@@ -502,6 +504,40 @@ async function exportCsv() {
   link.download = `sub-accounts-${new Date().toISOString().slice(0, 10)}.csv`
   link.click()
   URL.revokeObjectURL(url)
+}
+
+async function exportTxt() {
+  const rows = await loadAllRows()
+  if (rows.length === 0) {
+    ElMessage({message: '没有可导出的数据', type: 'warning', plain: true})
+    return
+  }
+
+  const text = rows.map(row => [
+    row.tiktokUsername,
+    row.password,
+    row.email,
+    row.token
+  ].map(value => String(value ?? '').trim()).join('----')).join('\n')
+
+  const blob = new Blob([text], {type: 'text/plain;charset=utf-8'})
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `sub-accounts-${new Date().toISOString().slice(0, 10)}.txt`
+  link.click()
+  URL.revokeObjectURL(url)
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      ElMessage({message: 'TXT 已导出并复制', type: 'success', plain: true})
+      return
+    }
+  } catch (error) {
+    // Download already completed; clipboard permission can be unavailable in some browsers.
+  }
+  ElMessage({message: 'TXT 已导出，浏览器未允许自动复制', type: 'success', plain: true})
 }
 
 async function loadAllRows() {

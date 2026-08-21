@@ -292,11 +292,12 @@ const assetService = {
 			const chunkLines = await Promise.all(chunk.map(async row => {
 				const tokenKey = subAccountService.tokenKey(row.email);
 				const token = await c.env.kv.get(tokenKey);
+				const codeUrl = token ? this.buildTkCodeUrl(c, row.email, token) : '';
 				return [
 					row.tiktokUsername || '',
 					row.password || '',
 					row.email || '',
-					token || ''
+					codeUrl
 				].join('----');
 			}));
 			lines.push(...chunkLines);
@@ -456,12 +457,13 @@ const assetService = {
 		const hasAccountIds = ['accountIds', 'account_ids', 'ids', 'accountId', 'account_id']
 			.some(key => Object.prototype.hasOwnProperty.call(params, key));
 		if (hasAccountIds) {
-			const accountIds = this.parseIdList(params.accountIds || params.account_ids || params.ids || params.accountId || params.account_id);
+			const accountIds = this.parseIdList(params.accountIds || params.account_ids || params.ids || params.accountId || params.account_id, 10000);
 			if (accountIds.length === 0) {
 				conditions.push('1 = 0');
 			} else {
-				conditions.push(`a.account_id IN (${accountIds.map(() => '?').join(',')})`);
-				binds.push(...accountIds);
+				// Keep selected IDs in one bound value so large exports stay below D1's variable limit.
+				conditions.push("instr(',' || ? || ',', ',' || CAST(a.account_id AS TEXT) || ',') > 0");
+				binds.push(`,${accountIds.join(',')},`);
 			}
 		}
 
@@ -874,6 +876,14 @@ const assetService = {
 		};
 	},
 
+	buildTkCodeUrl(c, email, token) {
+		const url = new URL('/getNewTkMailCode', c.req.url);
+		url.searchParams.set('username', email || '');
+		url.searchParams.set('token', token || '');
+		url.searchParams.set('format', 'json');
+		return url.toString();
+	},
+
 	parseFollowersFilter(value) {
 		const text = this.cleanText(value).replaceAll('，', ',').replaceAll(' ', '');
 		if (!text) return null;
@@ -910,12 +920,12 @@ const assetService = {
 		return null;
 	},
 
-	parseIdList(value) {
+	parseIdList(value, max = 500) {
 		const source = Array.isArray(value) ? value : String(value || '').split(',');
 		return [...new Set(source
 			.map(item => Number(item))
 			.filter(item => Number.isInteger(item) && item > 0)
-		)].slice(0, 500);
+		)].slice(0, max);
 	},
 
 	loginHealth(status) {
