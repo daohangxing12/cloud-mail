@@ -47,12 +47,7 @@ app.get('/getNewTkMailCode', async (c) => {
 
 	if (format === 'json') {
 		return c.json(result.ok({
-			username: params.username || params.email || params.toEmail,
-			mailCode: code,
-			emailId: data?.emailId || null,
-			fromEmail: data?.fromEmail || '',
-			subject: data?.subject || '',
-			createTime: data?.createTime || ''
+			mailCode: code
 		}));
 	}
 

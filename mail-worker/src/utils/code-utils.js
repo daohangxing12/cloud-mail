@@ -14,19 +14,24 @@ const KEYWORDS = [
 	'\u767b\u5f55\u7801'
 ];
 
+const CONTEXT_PATTERNS = [
+	/(?:^|[^A-Za-z0-9])(\d{6})(?![A-Za-z0-9])\s*(?:is\s+)?(?:your\s+)?(?:6[\s-]*digit\s+)?(?:verification\s+)?(?:code|otp|passcode)\b/i,
+	/\b(?:your\s+)?(?:6[\s-]*digit\s+)?(?:verification\s+)?(?:code|otp|passcode)\s*(?:is\s*)?(?::|\uff1a|-)?\s*(?:^|[^A-Za-z0-9])(\d{6})(?![A-Za-z0-9])/i,
+	/(?:\u9a8c\u8bc1\u7801|\u6821\u9a8c\u7801|\u52a8\u6001\u7801|\u5b89\u5168\u7801|\u767b\u5f55\u7801)\s*(?:\u662f\s*)?(?::|\uff1a|-)?\s*(?:^|[^A-Za-z0-9])(\d{6})(?![A-Za-z0-9])/i
+];
+
 const codeUtils = {
 	extract(row) {
-		const savedCode = this.normalizeCode(row?.code);
-		if (savedCode) {
-			return savedCode;
-		}
-
 		const subject = row?.subject || '';
 		const text = emailUtils.formatText(row?.text || '');
 		const htmlText = emailUtils.htmlToText(row?.content || '');
 		const body = [subject, text, htmlText].filter(Boolean).join('\n');
+		const contentCode = this.extractFromText(body);
+		if (contentCode) {
+			return contentCode;
+		}
 
-		return this.extractFromText(body);
+		return this.normalizeCode(row?.code);
 	},
 
 	extractFromText(value) {
@@ -37,11 +42,19 @@ const codeUtils = {
 		const text = String(value).replace(/[\u200B-\u200F\uFEFF\u034F\u00A0\u3000\u00AD]/g, ' ');
 		const lowerText = text.toLowerCase();
 
+		for (const pattern of CONTEXT_PATTERNS) {
+			const match = text.match(pattern);
+			const code = this.normalizeCode(match?.[1]);
+			if (code) {
+				return code;
+			}
+		}
+
 		for (const keyword of KEYWORDS) {
 			let index = lowerText.indexOf(keyword.toLowerCase());
 
 			while (index !== -1) {
-				const windowText = text.slice(index, index + 160);
+				const windowText = text.slice(Math.max(0, index - 80), index + 160);
 				const code = this.findCandidate(windowText);
 				if (code) {
 					return code;
@@ -54,23 +67,18 @@ const codeUtils = {
 	},
 
 	findCandidate(text) {
-		const candidates = [];
+		const candidates = new Set();
 		let match;
-		const numericRe = /(?:^|[^\d])(\d{4,8})(?!\d)/g;
+		const numericRe = /(?:^|[^A-Za-z0-9])(\d{6})(?![A-Za-z0-9])/g;
 
 		while ((match = numericRe.exec(text)) !== null) {
-			candidates.push(match[1]);
-		}
-
-		const alphaNumRe = /(?:^|[^A-Za-z0-9])([A-Za-z0-9][A-Za-z0-9_-]{3,7})(?![A-Za-z0-9])/g;
-		while ((match = alphaNumRe.exec(text)) !== null) {
 			const code = this.normalizeCode(match[1]);
 			if (code) {
-				candidates.push(code);
+				candidates.add(code);
 			}
 		}
 
-		return candidates[0] || '';
+		return candidates.size === 1 ? [...candidates][0] : '';
 	},
 
 	normalizeCode(code) {
@@ -80,11 +88,7 @@ const codeUtils = {
 
 		const value = code.trim().replace(/[\s-]+/g, '');
 
-		if (!/^[A-Za-z0-9]{4,8}$/.test(value)) {
-			return '';
-		}
-
-		if (!/\d/.test(value)) {
+		if (!/^\d{6}$/.test(value)) {
 			return '';
 		}
 

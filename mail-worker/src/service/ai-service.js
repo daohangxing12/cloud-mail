@@ -1,4 +1,5 @@
 import emailUtils from '../utils/email-utils';
+import codeUtils from '../utils/code-utils';
 import { settingConst } from '../const/entity-const';
 
 const aiService = {
@@ -14,6 +15,16 @@ const aiService = {
 			const text = emailUtils.formatText(email.text || '');
 			const htmlText = emailUtils.htmlToText(email.html || '');
 			const body = (htmlText || text).slice(0, 6000);
+			const deterministicCode = codeUtils.extract({
+				subject,
+				text,
+				content: email.html || '',
+				code: ''
+			});
+
+			if (deterministicCode) {
+				return deterministicCode;
+			}
 
 			if (!subject && !body) {
 				return '';
@@ -23,7 +34,7 @@ const aiService = {
 				messages: [
 					{
 						role: 'system',
-						content: 'You extract verification codes from emails. Return only JSON like {"code":"12345678"} or {"code":""}. The code must be 8 characters or fewer and must not contain spaces. If the code is longer than 8 characters or contains spaces, return {"code":""}. Do not explain.'
+						content: 'You extract 6-digit numeric verification codes from emails. Return only JSON like {"code":"123456"} or {"code":""}. Never return digits that are part of a username, email address, date, time, or device name. Do not explain.'
 					},
 					{
 						role: 'user',
@@ -36,15 +47,7 @@ const aiService = {
 
 			const content = typeof result === 'string' ? result : result?.response || '';
 			const json = JSON.parse(content);
-			if (typeof json.code !== 'string') {
-				return '';
-			}
-
-			if (json.code.length > 8 || /\s/.test(json.code)) {
-				return '';
-			}
-
-			return json.code;
+			return codeUtils.normalizeCode(json.code);
 		} catch (e) {
 			console.error('验证码提取失败: ', e);
 			return '';

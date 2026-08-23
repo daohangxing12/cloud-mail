@@ -8,6 +8,7 @@ import dayjs from 'dayjs';
 
 const CREATOR_FOLLOWERS_THRESHOLD = 10000;
 const CREATOR_VIEWS_THRESHOLD = 100000;
+const TK_CODE_BASE_URL = 'https://mail.ntmcn.com';
 const CREATOR_FINAL_STATUS_VALUES = [
 	CREATOR_STATUS.JOINED,
 	CREATOR_STATUS.REJECTED,
@@ -877,7 +878,7 @@ const assetService = {
 	},
 
 	buildTkCodeUrl(c, email, token) {
-		const url = new URL('/getNewTkMailCode', c.req.url);
+		const url = new URL('/getNewTkMailCode', TK_CODE_BASE_URL);
 		url.searchParams.set('username', email || '');
 		url.searchParams.set('token', token || '');
 		url.searchParams.set('format', 'json');
