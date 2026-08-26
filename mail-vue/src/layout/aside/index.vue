@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <el-scrollbar class="scroll">
     <div>
       <div class="title">
@@ -51,6 +51,10 @@
           <Icon icon="mdi:email-alert-outline" width="21" height="21" />
           <span class="menu-name" style="margin-left: 20px">&#x5783;&#x573e;&#x90ae;&#x7bb1;</span>
           <span v-if="spamUnread > 0" class="domain-badge">{{ formatUnread(spamUnread) }}</span>
+        </el-menu-item>
+        <el-menu-item @click="openWriter" index="write" v-perm="'email:send'">
+          <Icon icon="material-symbols:edit-outline-sharp" width="20" height="20" />
+          <span class="menu-name" style="margin-left: 20px">&#x5199;&#x4fe1;</span>
         </el-menu-item>
         <el-menu-item @click="router.push({name: 'send'})" index="send" v-perm="'email:send'"
                       :class="route.meta.name === 'send' ? 'choose-item' : ''">
@@ -124,12 +128,14 @@ import {useSettingStore} from '@/store/setting.js'
 import {useAccountStore} from '@/store/account.js'
 import {useEmailStore} from '@/store/email.js'
 import {useUserStore} from '@/store/user.js'
+import {useUiStore} from '@/store/ui.js'
 import {emailDomainStats} from '@/request/email.js'
 
 const settingStore = useSettingStore()
 const accountStore = useAccountStore()
 const emailStore = useEmailStore()
 const userStore = useUserStore()
+const uiStore = useUiStore()
 const route = useRoute()
 const domainStats = ref({})
 const globalInboxUnread = ref(0)
@@ -187,6 +193,10 @@ function openGlobalInbox() {
 function openSpam() {
   setGlobalMailbox(true, '\u5783\u573e\u90ae\u7bb1')
   router.push({name: 'spam'})
+}
+
+function openWriter() {
+  uiStore.writerRef?.open?.()
 }
 
 function openSubAccount() {

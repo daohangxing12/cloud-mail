@@ -7,8 +7,27 @@
             <Icon icon="hugeicons:quill-write-01" width="28" height="28"/>
           </span>
           <span class="sender">{{ $t('sender') }}:</span>
-          <span class="sender-name">{{ form.name }}</span>
-          <span class="send-email"><{{ form.sendEmail }}></span>
+            <el-select
+                v-model="form.accountId"
+                class="sender-select"
+                size="small"
+                :loading="senderAccountsLoading"
+                :placeholder="$t('sender')"
+                @change="changeSender"
+            >
+              <el-option
+                  v-for="item in senderAccounts"
+                  :key="item.accountId"
+                  :label="item.name || item.email"
+                  :value="item.accountId"
+              >
+                <div class="sender-option">
+                  <span>{{ item.name || item.email }}</span>
+                  <span class="sender-option-email">{{ item.email }}</span>
+                </div>
+              </el-option>
+            </el-select>
+            <span class="send-email"><{{ form.sendEmail }}></span>
         </div>
         <div @click="close" style="cursor: pointer;">
           <Icon icon="material-symbols-light:close-rounded" width="22" height="22"/>
@@ -114,6 +133,7 @@ import dayjs from "dayjs";
 import {useI18n} from "vue-i18n";
 import router from "@/router/index.js";
 import {ElMessageBox} from "element-plus";
+import {accountList} from "@/request/account.js";
 
 defineExpose({
   open,
@@ -138,6 +158,10 @@ const defValue = ref('')
 const contactsTabRef = ref({})
 const showContacts = ref(false)
 const mySelect = ref()
+const senderAccounts = ref([])
+const senderAccountsLoading = ref(false)
+let senderAccountsLoaded = false
+let senderAccountsPromise = null
 let selectStatus = false
 const backReply = reactive({
   receiveEmail: [],
@@ -248,6 +272,90 @@ function addTagChange(val) {
     }
   })
   if (selectStatus && has) openSelect()
+}
+
+function setSender(account) {
+  if (!account?.email || !isEmail(account.email)) return
+
+  form.sendEmail = account.email
+  form.accountId = account.accountId
+  form.name = account.name || account.email.split('@')[0]
+}
+
+function addSenderAccount(account) {
+  if (!account?.accountId || !isEmail(account.email)) return
+
+  const existingIndex = senderAccounts.value.findIndex(item => String(item.accountId) === String(account.accountId))
+  if (existingIndex >= 0) {
+    senderAccounts.value[existingIndex] = {...senderAccounts.value[existingIndex], ...account}
+    return
+  }
+
+  senderAccounts.value.push(account)
+}
+
+function getDefaultSender() {
+  const currentAccount = accountStore.currentAccount
+  if (isEmail(currentAccount?.email)) return currentAccount
+
+  const ownAccount = userStore.user?.account
+  if (isEmail(ownAccount?.email)) return ownAccount
+
+  if (isEmail(userStore.user?.email) && ownAccount?.accountId) {
+    return {...ownAccount, email: userStore.user.email}
+  }
+
+  return null
+}
+
+function changeSender(accountId) {
+  const account = senderAccounts.value.find(item => String(item.accountId) === String(accountId))
+  if (account) setSender(account)
+}
+
+async function loadSenderAccounts() {
+  if (senderAccountsLoaded) return senderAccounts.value
+  if (senderAccountsPromise) return senderAccountsPromise
+
+  senderAccountsLoading.value = true
+  senderAccountsPromise = (async () => {
+    const allAccounts = []
+    let cursorAccountId = 0
+    let cursorSort = 9999999999
+
+    for (let page = 0; page < 1000; page++) {
+      const result = await accountList(cursorAccountId, 30, cursorSort)
+      const rows = Array.isArray(result) ? result : []
+      if (rows.length === 0) break
+
+      allAccounts.push(...rows)
+      if (rows.length < 30) break
+
+      const last = rows[rows.length - 1]
+      const nextAccountId = Number(last.accountId)
+      const nextSort = Number(last.sort)
+      if (!Number.isFinite(nextAccountId) || !Number.isFinite(nextSort)) break
+      if (nextAccountId === cursorAccountId && nextSort === cursorSort) break
+
+      cursorAccountId = nextAccountId
+      cursorSort = nextSort
+    }
+
+    const uniqueAccounts = new Map()
+    allAccounts.forEach(account => {
+      if (account?.accountId && isEmail(account.email)) {
+        uniqueAccounts.set(String(account.accountId), account)
+      }
+    })
+    senderAccounts.value = Array.from(uniqueAccounts.values())
+    senderAccountsLoaded = true
+    return senderAccounts.value
+  })().finally(() => {
+    senderAccountsLoading.value = false
+    senderAccountsPromise = null
+  })
+
+  return senderAccountsPromise
 }
 
 function clearContent() {
@@ -507,25 +615,29 @@ function formatImage(content) {
 }
 
 function open() {
-  if (!accountStore.currentAccount.email) {
-    form.sendEmail = userStore.user.email;
-    form.accountId = userStore.user.account.accountId;
-    form.name = userStore.user.name;
-  } else {
-    form.sendEmail = accountStore.currentAccount.email;
-    form.accountId = accountStore.currentAccount.accountId;
-    form.name = accountStore.currentAccount.name;
+  const defaultSender = getDefaultSender()
+  if (defaultSender) {
+    setSender(defaultSender)
+    addSenderAccount(defaultSender)
   }
+
   show.value = true;
   editor.value.focus()
+  loadSenderAccounts().catch(error => console.error('加载发件邮箱失败:', error))
 }
 
 function openDraft(draft) {
   Object.assign(form, {...draft})
+  addSenderAccount({
+    accountId: form.accountId,
+    email: form.sendEmail,
+    name: form.name
+  })
   defValue.value = ''
   setTimeout(() => defValue.value = form.content)
   show.value = true;
   editor.value.focus()
+  loadSenderAccounts().catch(error => console.error('加载发件邮箱失败:', error))
 }
 
 const handleKeyDown = (event) => {
@@ -615,6 +727,18 @@ function close() {
 .write-select .el-select-dropdown {
   min-width: 0 !important;
 }
+
+.sender-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sender-option-email {
+  color: #999896;
+  font-size: 12px;
+}
 </style>
 <style scoped lang="scss">
 .send {
@@ -668,9 +792,9 @@ function close() {
         margin-left: 8px;
       }
 
-      .sender-name {
+      .sender-select {
         margin-left: 8px;
-        font-weight: bold;
+        min-width: 150px;
       }
 
       .send-email {
