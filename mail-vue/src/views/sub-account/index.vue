@@ -605,7 +605,7 @@ function buildCodeUrl(email, token, format = '') {
     token
   })
   if (format) query.set('format', format)
-  return `https://mail.ntmcn.com/getNewTkMailCode?${query.toString()}`
+  return `https://212202.xyz/getNewTkMailCode?${query.toString()}`
 }
 
 async function copyText(text) {

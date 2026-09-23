@@ -22,7 +22,7 @@ C:\Users\A\Documents\邮箱项目\_archived_mail_versions\20260715-fixed-stable-
 
 以下功能是稳定功能，后续修改不能删除、覆盖、改名或绕开：
 
-- mail.ntmcn.com 前端入口
+- 212202.xyz 前端和 API 入口
 - Cloudflare Worker 后端接口
 - 总收件箱入口和总未读数
 - 域名收件箱分组
@@ -42,7 +42,7 @@ C:\Users\A\Documents\邮箱项目\_archived_mail_versions\20260715-fixed-stable-
 3. 不允许因为修一个小功能，顺手重写页面结构。
 4. 不允许删除已有入口、筛选、排序、字段和接口。
 5. 部署前必须本地构建通过。
-6. 部署后必须验证 mail.ntmcn.com 不是 404。
+6. 部署后必须验证 212202.xyz 不是 404。
 7. 接码相关修改后必须验证 /api/local-agent/sub-account/token 返回 200。
 
 ## 当前线上稳定版本

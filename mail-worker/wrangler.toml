@@ -8,6 +8,10 @@ preview_urls = false
 [observability]
 enabled = true
 
+[[routes]]
+pattern = "212202.xyz"
+custom_domain = true
+
 [[d1_databases]]
 binding = "db"
 database_name = "cloud-mail-db"

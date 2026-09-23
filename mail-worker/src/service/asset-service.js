@@ -8,7 +8,7 @@ import dayjs from 'dayjs';
 
 const CREATOR_FOLLOWERS_THRESHOLD = 10000;
 const CREATOR_VIEWS_THRESHOLD = 100000;
-const TK_CODE_BASE_URL = 'https://mail.ntmcn.com';
+const TK_CODE_BASE_URL = 'https://212202.xyz';
 const CREATOR_FINAL_STATUS_VALUES = [
 	CREATOR_STATUS.JOINED,
 	CREATOR_STATUS.REJECTED,
