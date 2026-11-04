@@ -1,37 +1,54 @@
 <template>
-  <div class="sub-account-box" data-sub-account-version="creator-device-20260715">
-    <div class="header-actions">
-      <Icon class="icon" icon="ion:add-outline" width="23" height="23" title="新增子邮箱" @click="openAdd"/>
-      <Icon class="icon" icon="fluent:mail-inbox-add-20-regular" width="22" height="22" title="批量导入" @click="openImport"/>
-      <Icon class="icon" icon="fluent:link-multiple-20-regular" width="22" height="22" title="批量建号 / 接码链接" @click="openBatchTool"/>
-      <div class="search">
-        <el-input v-model="params.email" clearable class="search-input" placeholder="搜索子邮箱" @keyup.enter="search" @clear="search"/>
+  <div class="sa-page">
+    <div class="sa-toolbar">
+      <div class="sa-actions">
+        <el-button type="primary" @click="openAdd">
+          <Icon icon="ion:add-outline" width="16" height="16"/>
+          <span>新增</span>
+        </el-button>
+        <el-button @click="openBatchTool">
+          <Icon icon="fluent:link-multiple-20-regular" width="16" height="16"/>
+          <span>批量建号</span>
+        </el-button>
+        <el-button @click="openImport">
+          <Icon icon="fluent:mail-inbox-add-20-regular" width="16" height="16"/>
+          <span>批量导入</span>
+        </el-button>
       </div>
-      <div class="search user-search">
-        <el-input v-model="params.name" clearable class="search-input" placeholder="搜索备注" @keyup.enter="search" @clear="search"/>
+      <div class="sa-filters">
+        <el-input v-model="params.email" clearable class="sa-search" placeholder="搜索邮箱" @keyup.enter="search" @clear="search">
+          <template #prefix><Icon icon="iconoir:search" width="15" height="15"/></template>
+        </el-input>
+        <el-input v-model="params.name" clearable class="sa-search sa-hide-sm" placeholder="搜索备注" @keyup.enter="search" @clear="search"/>
+        <el-select v-model="params.domain" class="sa-select" placeholder="全部域名" @change="search">
+          <el-option label="全部域名" value=""/>
+          <el-option v-for="item in domainOptions" :key="item" :label="item" :value="item"/>
+        </el-select>
+        <el-select v-model="params.isDel" class="sa-select-sm" @change="search">
+          <el-option label="正常" :value="0"/>
+          <el-option label="已删除" :value="1"/>
+        </el-select>
+        <el-tooltip content="刷新"><el-button circle @click="refresh"><Icon icon="ion:reload" width="15" height="15"/></el-button></el-tooltip>
+        <el-dropdown trigger="click" @command="exportAs">
+          <el-button>
+            <Icon icon="ph:export" width="16" height="16"/>
+            <span>导出</span>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="links">邮箱----接码链接（TXT）</el-dropdown-item>
+              <el-dropdown-item command="csv">表格（CSV）</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button type="danger" plain :disabled="selectedCount === 0" @click="deleteSelected">
+          删除{{ selectedCount ? ` (${selectedCount})` : '' }}
+        </el-button>
       </div>
-      <el-select v-model="params.domain" class="domain-select" placeholder="全部域名" @change="search">
-        <el-option label="全部域名" value=""/>
-        <el-option v-for="item in domainOptions" :key="item" :label="item" :value="item"/>
-      </el-select>
-      <el-select v-model="params.creatorStatus" class="creator-select" placeholder="中视频" @change="search">
-        <el-option label="全部中视频" value=""/>
-        <el-option v-for="item in creatorStatusOptions" :key="item.value" :label="item.label" :value="item.value"/>
-      </el-select>
-      <el-select v-model="params.isDel" class="status-select" placeholder="状态" @change="search">
-        <el-option label="正常" :value="0"/>
-        <el-option label="已删除" :value="1"/>
-        <el-option label="全部" :value="-1"/>
-      </el-select>
-      <Icon class="icon" icon="iconoir:search" width="20" height="20" title="搜索" @click="search"/>
-      <Icon class="icon" icon="ion:reload" width="18" height="18" title="刷新" @click="refresh"/>
-      <Icon class="icon" icon="ph:export" width="21" height="21" title="导出 CSV" @click="exportCsv"/>
-      <Icon class="icon" icon="ph:file-txt" width="21" height="21" title="导出 TXT（复制并下载）" @click="exportTxt"/>
-      <Icon class="icon danger" icon="uiw:delete" width="16" height="16" title="删除选中" @click="deleteSelected"/>
     </div>
 
-    <el-scrollbar ref="scrollbarRef" class="scrollbar">
-      <div class="table-wrap">
+    <el-scrollbar ref="scrollbarRef" class="sa-scroll">
+      <div class="sa-table">
         <div class="loading" :class="tableLoading ? 'loading-show' : 'loading-hide'" :style="first ? 'background: transparent' : ''">
           <loading/>
         </div>
@@ -42,104 +59,57 @@
             :empty-text="first ? '' : '暂无子邮箱'"
             style="width: 100%;"
             @sort-change="sortChange"
+            @selection-change="rows => selectedCount = rows.length"
         >
           <el-table-column width="42" type="selection" :selectable="row => !isOwnerAccount(row)"/>
-          <el-table-column label="子邮箱" min-width="230" prop="email" sortable="custom" show-overflow-tooltip>
-            <template #default="props">
-              <div class="email-cell">
-                <span>{{ props.row.email }}</span>
-                <el-tag v-if="isOwnerAccount(props.row)" type="warning" size="small">主邮箱</el-tag>
+          <el-table-column label="邮箱" min-width="240" prop="email" sortable="custom">
+            <template #default="{row}">
+              <div class="sa-email">
+                <span class="sa-email-text" :title="row.email">{{ row.email }}</span>
+                <Icon class="sa-copy" icon="fluent:copy-20-regular" width="15" height="15" title="复制邮箱" @click="copyText(row.email)"/>
+                <el-tag v-if="isOwnerAccount(row)" type="warning" size="small">主邮箱</el-tag>
+                <el-tag v-if="row.isDel === 1" type="info" size="small">已删除</el-tag>
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="域名" width="130" prop="domain" sortable="custom">
-            <template #default="props">
-              <el-tag size="small">{{ getDomain(props.row.email) }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="备注" min-width="150" prop="name" sortable="custom" show-overflow-tooltip>
-            <template #default="props">
-              <span class="readonly-text">{{ props.row.name || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="设备号" width="130" prop="deviceNo" sortable="custom" show-overflow-tooltip>
-            <template #default="props">
-              <span>{{ props.row.deviceNo || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="中视频" width="112" prop="creatorStatus" sortable="custom">
-            <template #default="props">
-              <el-select
-                  v-model="props.row.editCreatorStatus"
+          <el-table-column label="备注" min-width="170" prop="name" sortable="custom">
+            <template #default="{row}">
+              <el-input
+                  v-model="row.editName"
+                  class="sa-inline"
                   size="small"
-                  clearable
-                  placeholder=""
-                  :disabled="props.row.savingCreatorStatus"
-                  @change="saveInlineCreatorStatus(props.row)"
-              >
-                <el-option v-for="item in creatorStatusOptions" :key="item.value" :label="item.label" :value="item.value"/>
-              </el-select>
+                  maxlength="30"
+                  placeholder="点击填写备注"
+                  :disabled="row.savingName"
+                  @blur="saveName(row)"
+                  @keyup.enter="$event.target.blur()"
+              />
             </template>
           </el-table-column>
-          <el-table-column label="接码 Token" width="110">
-            <template #default="props">
-              <el-tag v-if="props.row.hasToken" type="success" disable-transitions>已设置</el-tag>
-              <el-tag v-else type="info" disable-transitions>未设置</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="归属用户" min-width="210" prop="userEmail" sortable="custom" show-overflow-tooltip>
-            <template #default="props">
-              <span>{{ props.row.userEmail || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="90" prop="status" sortable="custom">
-            <template #default="props">
-              <el-tag v-if="props.row.isDel === 1" type="info" disable-transitions>已删除</el-tag>
-              <el-tag v-else-if="props.row.status === 1" type="danger" disable-transitions>停用</el-tag>
-              <el-tag v-else type="primary" disable-transitions>正常</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="TikTok" min-width="210" prop="tiktokUsername" sortable="custom">
-            <template #default="props">
-              <div class="tiktok-cell">
-                <el-input
-                    v-model="props.row.editTiktokUsername"
-                    class="tiktok-input"
-                    size="small"
-                    maxlength="80"
-                    placeholder="用户名或主页链接"
-                    :disabled="props.row.savingTiktok"
-                    @blur="saveInlineTikTok(props.row)"
-                    @keyup.enter="$event.target.blur()"
-                />
-                <el-tooltip v-if="props.row.tiktokUrl" effect="dark" content="打开 TikTok 主页">
-                  <Icon
-                      class="tiktok-open"
-                      icon="ri:send-plane-line"
-                      width="18"
-                      height="18"
-                      @click="openTikTok(props.row)"
-                  />
-                </el-tooltip>
+          <el-table-column label="接码链接" min-width="230">
+            <template #default="{row}">
+              <div v-if="row.hasToken" class="sa-link">
+                <span class="sa-link-text" :title="buildCodeUrl(row.email, row.token)">{{ shortLink(row) }}</span>
+                <el-button size="small" link type="primary" @click="copyCodeUrl(row)">复制</el-button>
+                <el-button size="small" link type="primary" @click="openCodePage(row)">打开</el-button>
               </div>
+              <el-button v-else size="small" plain type="primary" @click="setRandomToken(row)">生成链接</el-button>
             </template>
           </el-table-column>
-          <el-table-column label="创建时间" min-width="155" prop="createTime" sortable="custom">
-            <template #default="props">
-              {{ formatTime(props.row.createTime) }}
+          <el-table-column label="创建时间" width="150" prop="createTime" sortable="custom">
+            <template #default="{row}">
+              <span class="sa-muted">{{ formatTime(row.createTime) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="112" fixed="right">
-            <template #default="props">
+          <el-table-column label="" width="60" fixed="right">
+            <template #default="{row}">
               <el-dropdown trigger="click">
-                <el-button size="small" type="primary">操作</el-button>
+                <span class="sa-more"><Icon icon="mingcute:more-2-fill" width="18" height="18"/></span>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item @click="setRandomToken(props.row)">设置随机 Token</el-dropdown-item>
-                    <el-dropdown-item @click="copyCodeUrl(props.row)">复制接码链接</el-dropdown-item>
-                    <el-dropdown-item @click="openCodePage(props.row)">打开接码网页</el-dropdown-item>
-                    <el-dropdown-item v-if="props.row.isDel !== 1 && !isOwnerAccount(props.row)" @click="deleteRows([props.row])">
-                      删除
+                    <el-dropdown-item v-if="row.hasToken" @click="resetToken(row)">重新生成链接（旧链接失效）</el-dropdown-item>
+                    <el-dropdown-item v-if="row.isDel !== 1 && !isOwnerAccount(row)" @click="deleteRows([row])">
+                      <span style="color: var(--el-color-danger)">删除</span>
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -148,12 +118,12 @@
           </el-table-column>
         </el-table>
 
-        <div class="pagination" v-if="total > 10">
+        <div class="sa-pagination" v-if="total > 0">
           <el-pagination
               :current-page="params.num"
               :page-size="params.size"
               :pager-count="pagerCount"
-              :page-sizes="[10, 20, 30, 50, 100]"
+              :page-sizes="[20, 50, 100]"
               background
               :layout="pageLayout"
               :total="total"
@@ -164,34 +134,37 @@
       </div>
     </el-scrollbar>
 
-    <el-dialog v-model="addShow" title="新增子邮箱" @closed="resetAddForm">
-      <div class="dialog-box">
-        <el-input v-model.trim="addForm.email" placeholder="邮箱前缀或完整邮箱"/>
-        <el-select v-model="addForm.suffix" placeholder="选择域名">
-          <el-option v-for="item in domainOptions" :key="item" :label="item" :value="item"/>
-        </el-select>
-        <el-input v-model.trim="addForm.name" maxlength="30" show-word-limit placeholder="备注，可不填"/>
-        <el-input v-model.trim="addForm.userEmail" placeholder="归属用户邮箱，不填则归属当前登录用户"/>
+    <el-dialog v-model="addShow" title="新增子邮箱" width="420" @closed="resetAddForm">
+      <div class="sa-dialog">
+        <div class="sa-field">
+          <label>邮箱</label>
+          <div class="sa-email-input">
+            <el-input v-model.trim="addForm.email" placeholder="前缀，例如 support"/>
+            <el-select v-model="addForm.suffix" class="sa-suffix">
+              <el-option v-for="item in domainOptions" :key="item" :label="item" :value="item"/>
+            </el-select>
+          </div>
+        </div>
+        <div class="sa-field">
+          <label>备注（可不填）</label>
+          <el-input v-model.trim="addForm.name" maxlength="30" show-word-limit/>
+        </div>
+        <el-checkbox v-model="addForm.genToken">同时生成接码链接</el-checkbox>
         <el-button class="btn" type="primary" :loading="addLoading" @click="submitAdd">新增</el-button>
       </div>
     </el-dialog>
 
-    <el-dialog v-model="importShow" title="批量导入子邮箱" @closed="resetImportForm">
-      <div class="dialog-box">
-        <el-alert
-            type="info"
-            :closable="false"
-            title="每行一个邮箱；只填前缀时会自动拼接下面选择的域名。单次最多 200 个。"
-        />
-        <el-select v-model="importForm.suffix" placeholder="默认拼接域名">
+    <el-dialog v-model="importShow" title="批量导入子邮箱" width="460" @closed="resetImportForm">
+      <div class="sa-dialog">
+        <p class="sa-tip">每行一个；只填前缀时自动拼接下面的域名，单次最多 200 个。要同时生成接码链接请用「批量建号」。</p>
+        <el-select v-model="importForm.suffix" placeholder="默认域名">
           <el-option v-for="item in domainOptions" :key="item" :label="item" :value="item"/>
         </el-select>
-        <el-input v-model="importForm.userEmail" placeholder="归属用户邮箱，不填则归属当前登录用户"/>
         <el-input
             v-model="importForm.text"
             type="textarea"
             :autosize="{ minRows: 8, maxRows: 14 }"
-            placeholder="demo001&#10;demo002@orz.gay&#10;demo003"
+            placeholder="demo001&#10;demo002@ntmcn.com&#10;demo003"
         />
         <div class="import-result" v-if="importResult">
           <el-tag type="success">成功 {{ importResult.success.length }}</el-tag>
@@ -200,7 +173,6 @@
         <el-button class="btn" type="primary" :loading="importLoading" @click="submitImport">开始导入</el-button>
       </div>
     </el-dialog>
-
   </div>
 </template>
 
@@ -216,16 +188,16 @@ import {
   subAccountAdd,
   subAccountDelete,
   subAccountGenToken,
-  subAccountGetToken,
   subAccountImport,
   subAccountList,
-  subAccountSetCreatorStatus,
-  subAccountSetTiktok
+  subAccountSetName
 } from '@/request/sub-account.js'
 
 defineOptions({
   name: 'sub-account'
 })
+
+const CODE_BASE = 'https://mail.ntmcn.com'
 
 const settingStore = useSettingStore()
 const route = useRoute()
@@ -236,8 +208,9 @@ const scrollbarRef = ref(null)
 const tableLoading = ref(true)
 const first = ref(true)
 const total = ref(0)
+const selectedCount = ref(0)
 const pagerCount = ref(window.innerWidth < 768 ? 7 : 11)
-const pageLayout = ref(window.innerWidth < 768 ? 'pager' : 'prev, pager, next, sizes, total')
+const pageLayout = ref(window.innerWidth < 768 ? 'pager' : 'total, prev, pager, next, sizes')
 
 const addShow = ref(false)
 const importShow = ref(false)
@@ -249,7 +222,6 @@ const params = reactive({
   email: '',
   name: '',
   domain: '',
-  creatorStatus: '',
   isDel: 0,
   num: 1,
   size: 20,
@@ -257,25 +229,8 @@ const params = reactive({
   order: 'desc'
 })
 
-const addForm = reactive({
-  email: '',
-  suffix: '',
-  name: '',
-  userEmail: ''
-})
-
-const importForm = reactive({
-  text: '',
-  suffix: '',
-  userEmail: ''
-})
-
-const creatorStatusOptions = [
-  {label: '已加入', value: '已加入'},
-  {label: '被拒绝', value: '被拒绝'},
-  {label: '已封', value: '已封'},
-  {label: '无权限', value: '无权限'}
-]
+const addForm = reactive({email: '', suffix: '', name: '', genToken: true})
+const importForm = reactive({text: '', suffix: ''})
 
 watch(domainOptions, (list) => {
   if (!addForm.suffix && list.length > 0) addForm.suffix = list[0]
@@ -289,18 +244,18 @@ watch(() => route.query.domain, (domain) => {
 }, {immediate: true})
 
 window.addEventListener('resize', adjustPage)
-window.addEventListener('mail-insights-changed', refreshInsights)
+window.addEventListener('mail-insights-changed', refreshQuiet)
 adjustPage()
 getList(true)
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', adjustPage)
-  window.removeEventListener('mail-insights-changed', refreshInsights)
+  window.removeEventListener('mail-insights-changed', refreshQuiet)
 })
 
 function adjustPage() {
   pagerCount.value = window.innerWidth < 768 ? 7 : 11
-  pageLayout.value = window.innerWidth < 768 ? 'pager' : 'prev, pager, next, sizes, total'
+  pageLayout.value = window.innerWidth < 768 ? 'pager' : 'total, prev, pager, next, sizes'
 }
 
 function search() {
@@ -312,13 +267,12 @@ function refresh() {
   params.email = ''
   params.name = ''
   params.domain = ''
-  params.creatorStatus = ''
   params.isDel = 0
   params.num = 1
   getList(true)
 }
 
-function refreshInsights() {
+function refreshQuiet() {
   getList(false)
 }
 
@@ -346,14 +300,12 @@ function getList(showLoading = false) {
   subAccountList(query).then(data => {
     accounts.value = (data.list || []).map(row => ({
       ...row,
-      editTiktokUsername: row.tiktokUsername || '',
-      editCreatorStatus: row.creatorStatus || '',
-      savingTiktok: false,
-      savingCreatorStatus: false,
-      password: row.password || '',
+      editName: row.name || '',
+      savingName: false,
       token: row.token || ''
     }))
     total.value = data.total || 0
+    selectedCount.value = 0
     scrollbarRef.value?.setScrollTop(0)
   }).finally(() => {
     tableLoading.value = false
@@ -367,26 +319,34 @@ function openAdd() {
   addShow.value = true
 }
 
-function submitAdd() {
+async function submitAdd() {
   const email = buildEmail(addForm.email, addForm.suffix)
   if (!validateEmail(email)) return
 
   addLoading.value = true
-  subAccountAdd({
-    email,
-    name: addForm.name,
-    userEmail: addForm.userEmail || undefined
-  }).then(() => {
-    ElMessage({message: '新增成功', type: 'success', plain: true})
+  try {
+    const row = await subAccountAdd({email, name: addForm.name})
+    if (addForm.genToken && row?.accountId) {
+      const data = await subAccountGenToken(row.accountId)
+      await copyText(buildCodeUrl(email, data.token), '已新增，接码链接已复制')
+    } else {
+      ElMessage({message: '新增成功', type: 'success', plain: true})
+    }
     addShow.value = false
     getList(true)
-  }).finally(() => {
+  } catch (e) {
+    // 接口错误已由全局提示
+  } finally {
     addLoading.value = false
-  })
+  }
 }
 
 function openImport() {
   importShow.value = true
+}
+
+function openBatchTool() {
+  window.open('/batch-tool', '_blank')
 }
 
 function submitImport() {
@@ -397,10 +357,7 @@ function submitImport() {
   }
 
   importLoading.value = true
-  subAccountImport({
-    text,
-    userEmail: importForm.userEmail || undefined
-  }).then(data => {
+  subAccountImport({text}).then(data => {
     importResult.value = data
     ElMessage({
       message: `导入完成：成功 ${data.success.length} 个，失败 ${data.failed.length} 个`,
@@ -413,40 +370,17 @@ function submitImport() {
   })
 }
 
-function saveInlineTikTok(row) {
-  const nextUsername = String(row.editTiktokUsername || '').trim()
-  if (nextUsername === (row.tiktokUsername || '')) {
-    return
-  }
-
-  row.savingTiktok = true
-  subAccountSetTiktok(row.accountId, nextUsername).then(data => {
-    row.tiktokUsername = data.tiktokUsername || ''
-    row.editTiktokUsername = row.tiktokUsername
-    row.tiktokUrl = data.tiktokUrl || ''
-    ElMessage({message: 'TikTok 用户名保存成功', type: 'success', plain: true})
+function saveName(row) {
+  const next = String(row.editName || '').trim()
+  if (next === (row.name || '')) return
+  row.savingName = true
+  subAccountSetName(row.accountId, next).then(() => {
+    row.name = next
+    ElMessage({message: '备注已保存', type: 'success', plain: true})
   }).catch(() => {
-    row.editTiktokUsername = row.tiktokUsername || ''
+    row.editName = row.name || ''
   }).finally(() => {
-    row.savingTiktok = false
-  })
-}
-
-function saveInlineCreatorStatus(row) {
-  const nextStatus = validCreatorStatus(row.editCreatorStatus) ? row.editCreatorStatus : ''
-  if (nextStatus === (row.creatorStatus || '')) {
-    return
-  }
-
-  row.savingCreatorStatus = true
-  subAccountSetCreatorStatus(row.accountId, nextStatus).then(data => {
-    row.creatorStatus = data.creatorStatus || ''
-    row.editCreatorStatus = row.creatorStatus
-    ElMessage({message: '中视频状态已保存', type: 'success', plain: true})
-  }).catch(() => {
-    row.editCreatorStatus = row.creatorStatus || ''
-  }).finally(() => {
-    row.savingCreatorStatus = false
+    row.savingName = false
   })
 }
 
@@ -461,7 +395,7 @@ function deleteRows(rows) {
     ElMessage({message: '没有可删除的子邮箱', type: 'warning', plain: true})
     return
   }
-  ElMessageBox.confirm(`确认删除 ${list.length} 个子邮箱？`, {
+  ElMessageBox.confirm(`确认删除 ${list.length} 个子邮箱？删除后对应接码链接也会失效。`, {
     confirmButtonText: '确认',
     cancelButtonText: '取消',
     type: 'warning'
@@ -474,7 +408,12 @@ function deleteRows(rows) {
       })
       getList(true)
     })
-  })
+  }).catch(() => {})
+}
+
+function exportAs(command) {
+  if (command === 'csv') exportCsv()
+  else exportLinks()
 }
 
 async function exportCsv() {
@@ -483,62 +422,33 @@ async function exportCsv() {
     ElMessage({message: '没有可导出的数据', type: 'warning', plain: true})
     return
   }
-
-  const headers = ['子邮箱', '域名', '备注', '设备号', '中视频', '归属用户', '状态', 'TikTok用户名', 'TikTok链接', '创建时间']
+  const headers = ['邮箱', '备注', '接码链接', '创建时间']
   const body = rows.map(row => [
     row.email,
-    getDomain(row.email),
     row.name || '',
-    row.deviceNo || '',
-    row.creatorStatus || '',
-    row.userEmail || '',
-    row.isDel === 1 ? '已删除' : '正常',
-    row.tiktokUsername || '',
-    row.tiktokUrl || '',
+    row.token ? buildCodeUrl(row.email, row.token) : '',
     formatTime(row.createTime)
   ])
   const csv = [headers, ...body].map(row => row.map(csvEscape).join(',')).join('\n')
-  const blob = new Blob([`\ufeff${csv}`], {type: 'text/csv;charset=utf-8'})
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `sub-accounts-${new Date().toISOString().slice(0, 10)}.csv`
-  link.click()
-  URL.revokeObjectURL(url)
+  download(`﻿${csv}`, `子邮箱-${today()}.csv`, 'text/csv;charset=utf-8')
 }
 
-async function exportTxt() {
+async function exportLinks() {
   const rows = await loadAllRows()
-  if (rows.length === 0) {
-    ElMessage({message: '没有可导出的数据', type: 'warning', plain: true})
+  const withToken = rows.filter(row => row.token)
+  if (withToken.length === 0) {
+    ElMessage({message: '没有带接码链接的邮箱', type: 'warning', plain: true})
     return
   }
-
-  const text = rows.map(row => [
-    row.tiktokUsername,
-    row.password,
-    row.email,
-    row.token
-  ].map(value => String(value ?? '').trim()).join('----')).join('\n')
-
-  const blob = new Blob([text], {type: 'text/plain;charset=utf-8'})
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `sub-accounts-${new Date().toISOString().slice(0, 10)}.txt`
-  link.click()
-  URL.revokeObjectURL(url)
-
+  const text = withToken.map(row => `${row.email}----${buildCodeUrl(row.email, row.token)}`).join('\n')
+  download(text, `接码链接-${today()}.txt`, 'text/plain;charset=utf-8')
+  const skipped = rows.length - withToken.length
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-      ElMessage({message: 'TXT 已导出并复制', type: 'success', plain: true})
-      return
-    }
-  } catch (error) {
-    // Download already completed; clipboard permission can be unavailable in some browsers.
+    await navigator.clipboard.writeText(text)
+    ElMessage({message: `已导出并复制 ${withToken.length} 条${skipped ? `（${skipped} 个没有链接未导出）` : ''}`, type: 'success', plain: true})
+  } catch (e) {
+    ElMessage({message: `已导出 ${withToken.length} 条`, type: 'success', plain: true})
   }
-  ElMessage({message: 'TXT 已导出，浏览器未允许自动复制', type: 'success', plain: true})
 }
 
 async function loadAllRows() {
@@ -557,65 +467,58 @@ function setRandomToken(row) {
   subAccountGenToken(row.accountId).then(data => {
     row.token = data.token
     row.hasToken = true
-    copyText(buildCodeUrl(row.email, data.token))
-    ElMessage({
-      message: '随机 Token 已设置，旧 Token 已失效',
-      type: 'success',
-      plain: true
-    })
+    copyText(buildCodeUrl(row.email, data.token), '接码链接已生成并复制')
   })
 }
 
-async function getRowToken(row) {
-  if (row.token) {
-    return row.token
-  }
-  if (!row.hasToken) {
-    ElMessage({message: '请先设置随机 Token', type: 'warning', plain: true})
-    return ''
-  }
-  const data = await subAccountGetToken(row.accountId)
-  row.token = data.token || ''
-  row.hasToken = !!data.hasToken
-  if (!row.token) {
-    ElMessage({message: '请先设置随机 Token', type: 'warning', plain: true})
-  }
-  return row.token
+function resetToken(row) {
+  ElMessageBox.confirm(`重新生成后，${row.email} 的旧接码链接会立即失效，确认？`, {
+    confirmButtonText: '确认',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => setRandomToken(row)).catch(() => {})
 }
 
-async function copyCodeUrl(row) {
-  const token = await getRowToken(row)
-  if (!token) return
-  copyText(buildCodeUrl(row.email, token))
+function copyCodeUrl(row) {
+  if (!row.token) return
+  copyText(buildCodeUrl(row.email, row.token), '接码链接已复制')
 }
 
-async function openCodePage(row) {
-  const token = await getRowToken(row)
-  if (!token) return
-  window.open(buildCodeUrl(row.email, token, 'html'), '_blank')
+function openCodePage(row) {
+  if (!row.token) return
+  window.open(buildCodeUrl(row.email, row.token, 'html'), '_blank')
 }
 
-function openTikTok(row) {
-  if (!row.tiktokUrl) return
-  window.open(row.tiktokUrl, '_blank', 'noopener,noreferrer')
-}
-
-function openBatchTool() {
-  window.open('/batch-tool', '_blank')
-}
-
-function buildCodeUrl(email, token, format = '') {
-  const query = new URLSearchParams({
-    username: email,
-    token
-  })
+function buildCodeUrl(email, token, format = 'json') {
+  const query = new URLSearchParams({username: email, token})
   if (format) query.set('format', format)
-  return `https://mail.ntmcn.com/getNewTkMailCode?${query.toString()}`
+  return `${CODE_BASE}/getNewTkMailCode?${query.toString()}`
 }
 
-async function copyText(text) {
-  await navigator.clipboard.writeText(text)
-  ElMessage({message: '复制成功', type: 'success', plain: true})
+function shortLink(row) {
+  return `…/getNewTkMailCode?username=${row.email}`
+}
+
+async function copyText(text, message = '复制成功') {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage({message, type: 'success', plain: true})
+  } catch (e) {
+    ElMessage({message: '浏览器不允许自动复制，请手动复制', type: 'warning', plain: true})
+  }
+}
+
+function download(content, name, type) {
+  const url = URL.createObjectURL(new Blob([content], {type}))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10)
 }
 
 function buildEmail(value, suffix) {
@@ -648,23 +551,18 @@ function validateEmail(email) {
 function resetAddForm() {
   addForm.email = ''
   addForm.name = ''
-  addForm.userEmail = ''
+  addForm.genToken = true
   addForm.suffix = domainOptions.value[0] || ''
 }
 
 function resetImportForm() {
   importForm.text = ''
-  importForm.userEmail = ''
   importForm.suffix = domainOptions.value[0] || ''
   importResult.value = null
 }
 
 function formatTime(value) {
   return value ? tzDayjs(value).format('YYYY-MM-DD HH:mm') : '-'
-}
-
-function getDomain(email) {
-  return String(email || '').split('@')[1] || '-'
 }
 
 function cleanDomain(domain) {
@@ -676,149 +574,198 @@ function csvEscape(value) {
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
-function validCreatorStatus(value) {
-  return creatorStatusOptions.some(item => item.value === value)
-}
-
 function isOwnerAccount(row) {
   return row.email && row.userEmail && row.email.toLowerCase() === row.userEmail.toLowerCase()
 }
 </script>
 
 <style lang="scss" scoped>
-.sub-account-box {
+.sa-page {
   height: 100%;
   overflow: hidden;
-}
-
-.header-actions {
-  padding: 9px 15px;
   display: flex;
-  gap: 14px;
+  flex-direction: column;
+}
+
+.sa-toolbar {
+  padding: 10px 16px;
+  display: flex;
   flex-wrap: wrap;
+  gap: 10px;
   align-items: center;
+  justify-content: space-between;
   box-shadow: var(--header-actions-border);
-  font-size: 18px;
 
-  .icon {
-    cursor: pointer;
+  .el-button {
+    gap: 4px;
   }
 
-  .danger {
-    color: var(--el-color-danger);
-  }
-}
-
-.search {
-  :deep(.el-input-group) {
-    height: 28px;
-  }
-
-  :deep(.el-input__inner) {
-    height: 28px;
+  :deep(.el-button > span) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 }
 
-.search-input {
-  width: min(210px, calc(100vw - 140px));
+.sa-actions, .sa-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+
+  .el-button + .el-button {
+    margin-left: 0;
+  }
 }
 
-.user-search {
-  @media (max-width: 820px) {
+.sa-search {
+  width: 180px;
+}
+
+.sa-select {
+  width: 140px;
+}
+
+.sa-select-sm {
+  width: 92px;
+}
+
+.sa-hide-sm {
+  @media (max-width: 900px) {
     display: none;
   }
 }
 
-.domain-select {
-  width: 150px;
+.sa-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
-.creator-select {
-  width: 118px;
-}
-
-.status-select {
-  width: 96px;
-}
-
-.scrollbar {
-  width: 100%;
-  overflow: auto;
-  height: calc(100% - 50px);
-
-  @media (max-width: 767px) {
-    height: calc(100% - 92px);
-  }
-}
-
-.table-wrap {
+.sa-table {
   min-height: 100%;
   position: relative;
 }
 
-.email-cell {
+.sa-email {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-
-  span:first-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 }
 
-.tiktok-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  width: 100%;
-}
-
-.tiktok-input {
-  max-width: 168px;
-}
-
-.tiktok-open {
-  padding: 3px;
-  border-radius: 6px;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  cursor: pointer;
-}
-
-.tiktok-open:hover {
-  background: var(--el-color-primary-light-8);
-}
-
-.readonly-text {
-  color: var(--el-text-color-primary);
+.sa-email-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
-.pagination {
-  margin-top: 15px;
-  margin-bottom: 20px;
-  padding-right: 30px;
-  width: 100%;
-  display: flex;
-  justify-content: end;
+.sa-copy {
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+  opacity: 0;
+  transition: opacity .15s;
+}
 
-  @media (max-width: 767px) {
-    padding-right: 10px;
+:deep(.el-table__row:hover) .sa-copy {
+  opacity: 1;
+}
+
+.sa-inline {
+  :deep(.el-input__wrapper) {
+    box-shadow: none;
+    background: transparent;
+    padding-left: 0;
+  }
+
+  :deep(.el-input__wrapper:hover),
+  :deep(.el-input__wrapper.is-focus) {
+    box-shadow: 0 0 0 1px var(--el-border-color) inset;
+    background: var(--el-fill-color-blank);
+    padding-left: 8px;
   }
 }
 
-.dialog-box {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
+.sa-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+
+  .el-button + .el-button {
+    margin-left: 0;
+  }
 }
 
-.btn {
-  width: 100%;
+.sa-link-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+.sa-muted {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.sa-more {
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 4px;
+  color: var(--el-text-color-secondary);
+
+  &:hover {
+    background: var(--el-fill-color);
+  }
+}
+
+.sa-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 16px 20px;
+}
+
+.sa-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  .btn {
+    width: 100%;
+  }
+}
+
+.sa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
+  }
+}
+
+.sa-email-input {
+  display: flex;
+  gap: 8px;
+}
+
+.sa-suffix {
+  width: 170px;
+  flex-shrink: 0;
+}
+
+.sa-tip {
+  margin: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
 }
 
 .import-result {
@@ -828,39 +775,22 @@ function isOwnerAccount(row) {
 
 .loading {
   position: absolute;
+  inset: 0;
+  z-index: 3;
   display: flex;
-  align-items: center;
   justify-content: center;
-  background-color: var(--loadding-background);
-  left: 0;
-  z-index: 2;
-  top: 0;
-  width: 100%;
-  height: 100%;
+  align-items: center;
+  background: var(--el-bg-color);
+  transition: opacity .2s;
 }
 
 .loading-show {
-  transition: all 200ms ease 200ms;
   opacity: 1;
+  pointer-events: auto;
 }
 
 .loading-hide {
-  pointer-events: none;
-  transition: var(--loading-hide-transition);
   opacity: 0;
-}
-
-:deep(.el-dialog) {
-  width: 430px !important;
-
-  @media (max-width: 470px) {
-    width: calc(100% - 40px) !important;
-    margin-right: 20px !important;
-    margin-left: 20px !important;
-  }
-}
-
-:deep(.el-table__inner-wrapper:before) {
-  background: var(--el-bg-color);
+  pointer-events: none;
 }
 </style>

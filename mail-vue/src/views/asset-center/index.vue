@@ -1,108 +1,56 @@
-﻿<template>
-  <div class="asset-page">
-    <section class="toolbar">
-      <div class="toolbar-title">
-        <p>邮箱资产</p>
-        <span>按邮箱维度管理窗口名、TikTok、密码、粉丝、播放和中视频状态</span>
+<template>
+  <div class="ac-page">
+    <div class="ac-toolbar">
+      <div class="ac-row">
+        <el-input v-model.trim="params.email" clearable class="ac-search" placeholder="搜索邮箱" @keyup.enter="search" @clear="search">
+          <template #prefix><Icon icon="iconoir:search" width="15" height="15"/></template>
+        </el-input>
+        <el-input v-model.trim="params.tiktokUsername" clearable class="ac-search" placeholder="搜索 TikTok" @keyup.enter="search" @clear="search"/>
+        <el-input v-model.trim="params.keyword" clearable class="ac-search ac-hide-sm" placeholder="搜索备注" @keyup.enter="search" @clear="search"/>
+        <el-input v-model.trim="params.followersFilter" clearable class="ac-search-sm" placeholder="粉丝 >10000" @keyup.enter="search" @clear="search"/>
+        <el-select v-model="params.domain" class="ac-select" placeholder="全部域名" @change="search">
+          <el-option label="全部域名" value=""/>
+          <el-option v-for="item in domainOptions" :key="item" :label="`@${item}`" :value="item"/>
+        </el-select>
+        <el-select v-model="params.creatorStatus" class="ac-select-sm" placeholder="中视频" @change="search">
+          <el-option label="全部中视频" value=""/>
+          <el-option v-for="item in creatorStatusOptions" :key="item.value" :label="item.label" :value="item.value"/>
+        </el-select>
+        <el-select v-model="params.status" class="ac-select-sm" @change="search">
+          <el-option label="正常" value="active"/>
+          <el-option label="已删除" value="deleted"/>
+          <el-option label="全部" value="all"/>
+        </el-select>
+        <el-tooltip content="清空筛选并刷新"><el-button circle @click="refresh"><Icon icon="ion:reload" width="15" height="15"/></el-button></el-tooltip>
       </div>
-      <div class="toolbar-actions">
-        <el-input v-model.trim="params.email" clearable class="search-input" placeholder="搜索邮箱" @keyup.enter="search" @clear="search" />
-        <el-input v-model.trim="params.tiktokUsername" clearable class="search-input" placeholder="搜索 TikTok" @keyup.enter="search" @clear="search" />
-        <el-input v-model.trim="params.keyword" clearable class="search-input" placeholder="搜索备注/窗口名" @keyup.enter="search" @clear="search" />
-        <el-input v-model.trim="params.bitGroupName" clearable class="search-input" placeholder="搜索比特分组" @keyup.enter="search" @clear="search" />
-        <el-input v-model.trim="params.deviceNo" clearable class="search-input small" placeholder="搜索设备号 ys28" @keyup.enter="search" @clear="search" />
-        <el-input v-model.trim="params.followersFilter" clearable class="search-input small" placeholder="粉丝筛选 >10000" @keyup.enter="search" @clear="search" />
-        <el-select v-model="params.domain" class="select" placeholder="全部域名" @change="search">
-          <el-option label="全部域名" value="" />
-          <el-option v-for="item in domainOptions" :key="item" :label="`@${item}`" :value="item" />
-        </el-select>
-        <el-select v-model="params.emailScope" class="select creator" placeholder="邮箱来源" @change="search">
-          <el-option label="全部邮箱" value="" />
-          <el-option label="项目域名" value="internal" />
-          <el-option label="外部邮箱" value="external" />
-        </el-select>
-        <el-select v-model="params.status" class="select small" placeholder="状态" @change="search">
-          <el-option label="正常资产" value="active" />
-          <el-option label="全部" value="all" />
-          <el-option label="已停用" value="disabled" />
-          <el-option label="已删除" value="deleted" />
-        </el-select>
-        <el-select v-model="params.tiktokLinked" class="select small" placeholder="TikTok状态" @change="search">
-          <el-option label="全部 TikTok" value="" />
-          <el-option label="已识别" value="1" />
-          <el-option label="未识别" value="0" />
-        </el-select>
-        <el-select v-model="params.bitBrowserLinked" class="select creator" placeholder="浏览器状态" @change="search">
-          <el-option label="全部浏览器" value="" />
-          <el-option label="已同步" value="1" />
-          <el-option label="未同步" value="0" />
-        </el-select>
-        <el-select v-model="params.syncState" class="select creator" placeholder="本地同步" @change="search">
-          <el-option label="全部同步" value="" />
-          <el-option label="已同步" value="synced" />
-          <el-option label="未同步" value="unsynced" />
-        </el-select>
-        <el-select v-model="params.loginHealth" class="select creator" placeholder="登录状态" @change="search">
-          <el-option label="全部登录" value="" />
-          <el-option label="正常" value="normal" />
-          <el-option label="异常" value="abnormal" />
-          <el-option label="未同步" value="unknown" />
-        </el-select>
-        <el-select v-model="params.creatorReady" class="select creator" placeholder="中视频参考" @change="search">
-          <el-option label="全部" value="" />
-          <el-option label="疑似达标" value="1" />
-          <el-option label="待积累" value="0" />
-        </el-select>
-        <el-select v-model="params.creatorTodo" class="select creator" placeholder="中视频待办" @change="search">
-          <el-option label="全部待办" value="" />
-          <el-option label="待处理" value="1" />
-        </el-select>
-        <el-select v-model="params.creatorStatus" class="select creator" placeholder="中视频状态" @change="search">
-          <el-option label="全部状态" value="" />
-          <el-option v-for="item in creatorStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select v-model="params.deviceState" class="select creator" placeholder="设备状态" @change="search">
-          <el-option label="全部设备" value="" />
-          <el-option label="双开完整" value="complete" />
-          <el-option label="只登录1个" value="single" />
-          <el-option label="缺A位" value="missingA" />
-          <el-option label="缺B位" value="missingB" />
-          <el-option label="无设备号" value="empty" />
-        </el-select>
-        <el-button class="sync-button" type="success" plain :loading="scanLoading" @click="scanCreatorRewards">
-          扫描中视频邮件
+      <div class="ac-row">
+        <el-dropdown trigger="click" @command="runScan">
+          <el-button :loading="scanLoading || scanTikTokLoading">
+            <Icon icon="mdi:email-search-outline" width="16" height="16"/>
+            <span>从邮件识别</span>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="tiktok">识别 TikTok 用户名</el-dropdown-item>
+              <el-dropdown-item command="creator">识别中视频状态</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button type="primary" :loading="exportLoading" @click="exportTxt">
+          <Icon icon="ph:export" width="16" height="16"/>
+          <span>导出{{ selectedRows.length ? `选中 (${selectedRows.length})` : '' }}</span>
         </el-button>
-        <el-button class="sync-button" type="warning" plain :loading="scanTikTokLoading" @click="scanTikTokInbox">
-          扫描 TikTok 绑定
+        <el-button v-if="selectedDeletedRows.length > 0" type="primary" plain :loading="batchLoading" @click="restoreSelectedAssets">
+          恢复 ({{ selectedDeletedRows.length }})
         </el-button>
-        <el-button class="sync-button" type="primary" plain @click="syncDialogShow = true">
-          &#x77e9;&#x9635;&#x540c;&#x6b65;&#x5165;&#x53e3;
-        </el-button>
-        <Icon class="tool-icon" icon="iconoir:search" width="20" height="20" @click="search" />
-        <Icon class="tool-icon" icon="ion:reload" width="18" height="18" @click="refresh" />
-        <el-button class="sync-button export-button" type="primary" :loading="exportLoading" @click="exportTxt">
-          <Icon icon="ph:export" width="20" height="20" />
-          一键导出 TXT
-        </el-button>
-        <el-button class="sync-button" type="danger" plain :disabled="selectedDeletableRows.length === 0" :loading="batchLoading" @click="deleteSelectedAssets">
-          删除选中
-        </el-button>
-        <el-button
-            v-if="params.status === 'deleted' || selectedDeletedRows.length > 0"
-            class="sync-button"
-            type="primary"
-            plain
-            :disabled="selectedDeletedRows.length === 0"
-            :loading="batchLoading"
-            @click="restoreSelectedAssets"
-        >
-          恢复选中
+        <el-button type="danger" plain :disabled="selectedDeletableRows.length === 0" :loading="batchLoading" @click="deleteSelectedAssets">
+          删除{{ selectedDeletableRows.length ? ` (${selectedDeletableRows.length})` : '' }}
         </el-button>
       </div>
-    </section>
+    </div>
 
-    <el-scrollbar ref="scrollbarRef" class="table-scroll">
-      <div class="table-wrap">
+    <el-scrollbar ref="scrollbarRef" class="ac-scroll">
+      <div class="ac-table">
         <el-table
             ref="tableRef"
             v-loading="loading"
@@ -112,155 +60,124 @@
             style="width: 100%;"
             @selection-change="selectionChange"
         >
-          <el-table-column width="42" type="selection" fixed="left" />
-          <el-table-column label="邮箱" min-width="230" fixed="left" show-overflow-tooltip>
-            <template #default="props">
-              <div class="mail-cell">
-                <strong>{{ props.row.email }}</strong>
-                <el-tag size="small">@{{ props.row.domain }}</el-tag>
+          <el-table-column width="42" type="selection" fixed="left"/>
+          <el-table-column label="邮箱" min-width="230" fixed="left">
+            <template #default="{row}">
+              <div class="ac-email">
+                <span class="ac-email-text" :title="row.email">{{ row.email }}</span>
+                <el-tag v-if="Number(row.isDel || 0) === 1" type="info" size="small">已删除</el-tag>
               </div>
             </template>
           </el-table-column>
 
-          <el-table-column label="备注" min-width="170" show-overflow-tooltip>
-            <template #default="props">
+          <el-table-column label="备注" min-width="150">
+            <template #default="{row}">
               <el-input
-                  v-model="props.row.editName"
+                  v-model="row.editName"
+                  class="ac-inline"
                   size="small"
                   maxlength="80"
-                  placeholder="备注"
-                  @blur="saveTextField(props.row, 'name', 'editName')"
+                  placeholder="点击填写"
+                  @blur="saveTextField(row, 'name', 'editName')"
                   @keyup.enter="$event.target.blur()"
               />
             </template>
           </el-table-column>
 
-          <el-table-column label="TikTok" min-width="220">
-            <template #default="props">
-              <div class="inline-field">
+          <el-table-column label="TikTok" min-width="200">
+            <template #default="{row}">
+              <div class="ac-tiktok">
                 <el-input
-                    v-model="props.row.editTiktokUsername"
+                    v-model="row.editTiktokUsername"
+                    class="ac-inline"
                     size="small"
                     maxlength="80"
                     placeholder="用户名或主页链接"
-                    @blur="saveTextField(props.row, 'tiktokUsername', 'editTiktokUsername')"
+                    @blur="saveTextField(row, 'tiktokUsername', 'editTiktokUsername')"
                     @keyup.enter="$event.target.blur()"
                 />
-                <Icon
-                    v-if="props.row.tiktokUrl"
-                    class="open-icon"
-                    icon="ri:send-plane-line"
-                    width="18"
-                    height="18"
-                    @click="openTikTok(props.row)"
-                />
+                <Icon v-if="row.tiktokUrl" class="ac-open" icon="ri:external-link-line" width="16" height="16" title="打开主页" @click="openTikTok(row)"/>
               </div>
             </template>
           </el-table-column>
 
-          <el-table-column label="设备号" width="140" show-overflow-tooltip>
-            <template #default="props">
-              <el-input
-                  v-model="props.row.editDeviceNo"
-                  size="small"
-                  maxlength="60"
-                  placeholder=""
-                  @blur="saveTextField(props.row, 'deviceNo', 'editDeviceNo')"
-                  @keyup.enter="$event.target.blur()"
-              />
-            </template>
-          </el-table-column>
-
-          <el-table-column label="粉丝" width="130">
-            <template #default="props">
+          <el-table-column label="粉丝" width="110" align="right">
+            <template #default="{row}">
               <el-input-number
-                  v-model="props.row.editTiktokFollowers"
+                  v-model="row.editTiktokFollowers"
                   :min="0"
                   :controls="false"
                   size="small"
-                  class="metric-input"
-                  @change="saveMetricField(props.row, 'tiktokFollowers', 'editTiktokFollowers')"
+                  class="ac-num"
+                  @change="saveMetricField(row, 'tiktokFollowers', 'editTiktokFollowers')"
               />
             </template>
           </el-table-column>
 
-          <el-table-column label="播放" width="130">
-            <template #default="props">
+          <el-table-column label="播放" width="120" align="right">
+            <template #default="{row}">
               <el-input-number
-                  v-model="props.row.editTiktokViews"
+                  v-model="row.editTiktokViews"
                   :min="0"
                   :controls="false"
                   size="small"
-                  class="metric-input"
-                  @change="saveMetricField(props.row, 'tiktokViews', 'editTiktokViews')"
+                  class="ac-num"
+                  @change="saveMetricField(row, 'tiktokViews', 'editTiktokViews')"
               />
             </template>
           </el-table-column>
 
-          <el-table-column label="中视频状态" width="112">
-            <template #default="props">
+          <el-table-column label="中视频" width="120">
+            <template #default="{row}">
               <el-select
-                  v-model="props.row.editCreatorStatus"
+                  v-model="row.editCreatorStatus"
                   size="small"
                   clearable
-                  placeholder=""
-                  @change="saveCreatorStatus(props.row)"
+                  placeholder="—"
+                  :class="['ac-status', creatorClass(row.editCreatorStatus)]"
+                  @change="saveCreatorStatus(row)"
               >
-                <el-option v-for="item in creatorStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+                <el-option v-for="item in creatorStatusOptions" :key="item.value" :label="item.label" :value="item.value"/>
               </el-select>
             </template>
           </el-table-column>
 
-          <el-table-column label="窗口名" min-width="170" show-overflow-tooltip>
-            <template #default="props">
-              <span>{{ props.row.windowName || '-' }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="比特分组" min-width="150" show-overflow-tooltip>
-            <template #default="props">
-              <span>{{ props.row.bitGroupName || '-' }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column min-width="170">
+          <el-table-column min-width="160">
             <template #header>
-              <div class="password-header">
+              <div class="ac-pwd-head">
                 <span>密码</span>
                 <Icon
-                    class="open-icon"
+                    class="ac-open"
                     :icon="showAllPasswords ? 'mdi:eye-off-outline' : 'mdi:eye-outline'"
-                    width="18"
-                    height="18"
-                    :title="showAllPasswords ? '一键隐藏密码' : '一键显示密码'"
+                    width="16"
+                    height="16"
+                    :title="showAllPasswords ? '隐藏密码' : '显示密码'"
                     @click.stop="toggleAllPasswords"
                 />
               </div>
             </template>
-            <template #default="props">
-              <div class="inline-field">
-                <el-input
-                    v-model="props.row.editPassword"
-                    size="small"
-                    maxlength="256"
-                    :type="showAllPasswords ? 'text' : 'password'"
-                    placeholder="密码"
-                    @blur="saveTextField(props.row, 'password', 'editPassword')"
-                    @keyup.enter="$event.target.blur()"
-                />
-              </div>
+            <template #default="{row}">
+              <el-input
+                  v-model="row.editPassword"
+                  class="ac-inline"
+                  size="small"
+                  maxlength="256"
+                  :type="showAllPasswords ? 'text' : 'password'"
+                  placeholder="—"
+                  @blur="saveTextField(row, 'password', 'editPassword')"
+                  @keyup.enter="$event.target.blur()"
+              />
             </template>
           </el-table-column>
-
         </el-table>
 
-        <div class="pagination" v-if="total > 10">
+        <div class="ac-pagination" v-if="total > 0">
           <el-pagination
               :current-page="params.num"
               :page-size="params.size"
-              :page-sizes="[10, 20, 30, 50, 100]"
+              :page-sizes="[20, 50, 100]"
               background
-              layout="prev, pager, next, sizes, total"
+              layout="total, prev, pager, next, sizes"
               :total="total"
               @size-change="sizeChange"
               @current-change="numChange"
@@ -269,45 +186,9 @@
       </div>
     </el-scrollbar>
 
-    <el-dialog v-model="syncDialogShow" class="sync-dialog" title="&#x77e9;&#x9635;&#x540c;&#x6b65;&#x5165;&#x53e3;">
-      <div class="sync-guide">
-        <el-alert
-            type="info"
-            :closable="false"
-            title="&#x8fd9;&#x4e2a;&#x5165;&#x53e3;&#x7ed9;&#x672c;&#x5730;&#x77e9;&#x9635;&#x5de5;&#x5177;&#x4f7f;&#x7528;&#xff1a;&#x672c;&#x5730;&#x8f6f;&#x4ef6;&#x8d1f;&#x8d23;&#x6267;&#x884c;&#x52a8;&#x4f5c;&#xff0c;Cloudflare &#x8d1f;&#x8d23;&#x4fdd;&#x5b58;&#x90ae;&#x7bb1;&#x8d44;&#x4ea7;&#x72b6;&#x6001;&#x3002;"
-        />
-        <div class="sync-card">
-          <div>
-            <strong>&#x8d26;&#x53f7;&#x8d44;&#x4ea7;&#x540c;&#x6b65; API</strong>
-            <p>{{ accountSyncUrl }}</p>
-          </div>
-          <el-button size="small" @click="copySyncText(accountSyncUrl)">&#x590d;&#x5236;</el-button>
-        </div>
-        <div class="sync-card">
-          <div>
-            <strong>TikTok &#x6570;&#x636e;&#x540c;&#x6b65; API</strong>
-            <p>{{ statsSyncUrl }}</p>
-          </div>
-          <el-button size="small" @click="copySyncText(statsSyncUrl)">&#x590d;&#x5236;</el-button>
-        </div>
-        <div class="sync-note">
-          <p><b>Token &#x653e;&#x54ea;&#x91cc;&#xff1a;</b>&#x8bf7;&#x6c42;&#x5934;&#x4f7f;&#x7528; <code>x-agent-token</code>&#xff0c;&#x4e0d;&#x8981;&#x628a; Token &#x5199;&#x8fdb;&#x7f51;&#x9875;&#x94fe;&#x63a5;&#x3002;</p>
-          <p><b>&#x81ea;&#x52a8;&#x521b;&#x5efa;&#xff1a;</b>&#x4f20; <code>createIfMissing: true</code> &#x540e;&#xff0c;Cloudflare &#x4f1a;&#x81ea;&#x52a8;&#x521b;&#x5efa;&#x4e0d;&#x5b58;&#x5728;&#x7684;&#x90ae;&#x7bb1;&#x8d44;&#x4ea7;&#x3002;</p>
-          <p><b>&#x5b89;&#x5168;&#x8fb9;&#x754c;&#xff1a;</b>&#x8fd9;&#x91cc;&#x540c;&#x6b65;&#x90ae;&#x7bb1;&#x3001;&#x7a97;&#x53e3;&#x540d;&#x3001;TikTok&#x3001;&#x5bc6;&#x7801;&#x3001;&#x5206;&#x7ec4;&#x3001;&#x7c89;&#x4e1d;&#x64ad;&#x653e;&#x548c;&#x72b6;&#x6001;&#xff1b;&#x5bc6;&#x7801;&#x9ed8;&#x8ba4;&#x9690;&#x85cf;&#x663e;&#x793a;&#x3002;</p>
-        </div>
-        <div>
-          <div class="example-head">
-            <strong>JSON &#x793a;&#x4f8b;</strong>
-            <el-button size="small" @click="copySyncText(syncExample)">&#x590d;&#x5236;&#x793a;&#x4f8b;</el-button>
-          </div>
-          <pre class="sync-example">{{ syncExample }}</pre>
-        </div>
-      </div>
-    </el-dialog>
-
     <el-dialog v-model="exportDialogShow" class="export-dialog" title="导出邮箱资产 TXT">
       <div class="export-result">
-        <p>{{ exportScope }}，共 {{ exportCount }} 条。可在下方选择文字，也可以直接复制或下载。</p>
+        <p>{{ exportScope }}，共 {{ exportCount }} 条。</p>
         <el-input
             :model-value="exportText"
             type="textarea"
@@ -318,11 +199,11 @@
       </div>
       <template #footer>
         <el-button @click="copyExportText">
-          <Icon icon="ph:copy" width="18" height="18" />
+          <Icon icon="ph:copy" width="18" height="18"/>
           复制
         </el-button>
         <el-button type="primary" @click="downloadExportTxt">
-          <Icon icon="ph:download-simple" width="18" height="18" />
+          <Icon icon="ph:download-simple" width="18" height="18"/>
           下载 TXT
         </el-button>
       </template>
@@ -815,6 +696,15 @@ function loginText(value) {
   return '未同步'
 }
 
+function runScan(command) {
+  if (command === 'creator') scanCreatorRewards()
+  else scanTikTokInbox()
+}
+
+function creatorClass(value) {
+  return {'已加入': 'is-ok', '被拒绝': 'is-bad', '已封': 'is-bad', '无权限': 'is-warn'}[value] || ''
+}
+
 function validCreatorStatus(value) {
   return creatorStatusOptions.some(item => item.value === value)
 }
@@ -838,270 +728,154 @@ function csvEscape(value) {
 </script>
 
 <style scoped lang="scss">
-.asset-page {
+.ac-page {
   height: 100%;
-  display: grid;
-  grid-template-rows: auto 1fr;
   overflow: hidden;
-  background: var(--extra-light-fill);
-}
-
-.toolbar {
-  padding: 14px 16px;
-  display: grid;
-  gap: 12px;
-  border-bottom: 1px solid var(--el-border-color-light);
-  background: var(--el-bg-color);
-}
-
-.toolbar-title {
   display: flex;
-  align-items: end;
-  gap: 12px;
+  flex-direction: column;
+}
+
+.ac-toolbar {
+  padding: 10px 16px;
+  display: flex;
   flex-wrap: wrap;
-
-  p {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 700;
-  }
-
-  span {
-    color: var(--el-text-color-secondary);
-  }
-}
-
-.toolbar-actions {
-  display: flex;
+  gap: 8px 16px;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  box-shadow: var(--header-actions-border);
+
+  :deep(.el-button > span) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+.ac-row {
+  display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+
+  .el-button + .el-button {
+    margin-left: 0;
+  }
 }
 
-.search-input {
-  width: 180px;
+.ac-search {
+  width: 170px;
 }
 
-.search-input.small {
-  width: 150px;
+.ac-search-sm {
+  width: 120px;
 }
 
-.select {
+.ac-select {
   width: 140px;
 }
 
-.select.small {
-  width: 126px;
+.ac-select-sm {
+  width: 110px;
 }
 
-.select.creator {
-  width: 136px;
+.ac-hide-sm {
+  @media (max-width: 1100px) {
+    display: none;
+  }
 }
 
-.sync-button {
-  height: 32px;
+.ac-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
-.export-button {
-  min-width: 182px;
-  height: 40px;
-  padding: 0 20px;
-  font-size: 14px;
-  font-weight: 700;
-  box-shadow: 0 8px 18px rgba(64, 158, 255, 0.18);
-}
-
-.tool-icon {
-  cursor: pointer;
-  padding: 5px;
-  border-radius: 8px;
-  color: var(--el-text-color-primary);
-}
-
-.tool-icon:hover {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-}
-
-.table-scroll {
-  height: 100%;
-}
-
-.table-wrap {
+.ac-table {
   min-height: 100%;
-  padding: 14px;
 }
 
-.mail-cell {
-  display: grid;
-  gap: 5px;
-
-  strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .el-tag {
-    width: fit-content;
-  }
-}
-
-.inline-field {
+.ac-email {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.readonly-text {
-  color: var(--el-text-color-primary);
+.ac-email-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
-.password-header {
-  display: inline-flex;
+.ac-tiktok, .ac-pwd-head {
+  display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.open-icon {
-  flex: none;
-  padding: 3px;
-  border-radius: 7px;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  cursor: pointer;
-}
-
-.metric-input {
-  width: 104px;
-}
-
-.retry-cell {
-  display: grid;
   gap: 4px;
+}
 
-  :deep(.el-date-editor.el-input) {
-    width: 138px;
-  }
+.ac-open {
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
 
-  small {
-    color: var(--el-text-color-secondary);
-    font-size: 11px;
+  &:hover {
+    color: var(--el-color-primary);
   }
 }
 
-.sync-time {
-  display: grid;
-  gap: 3px;
+.ac-inline {
+  :deep(.el-input__wrapper) {
+    box-shadow: none;
+    background: transparent;
+    padding-left: 0;
+  }
 
-  small {
-    color: var(--el-text-color-secondary);
+  :deep(.el-input__wrapper:hover),
+  :deep(.el-input__wrapper.is-focus) {
+    box-shadow: 0 0 0 1px var(--el-border-color) inset;
+    background: var(--el-fill-color-blank);
+    padding-left: 8px;
   }
 }
 
-.pagination {
-  margin: 16px 0 8px;
+.ac-num {
+  width: 100%;
+
+  :deep(.el-input__wrapper) {
+    box-shadow: none;
+    background: transparent;
+  }
+
+  :deep(.el-input__wrapper:hover),
+  :deep(.el-input__wrapper.is-focus) {
+    box-shadow: 0 0 0 1px var(--el-border-color) inset;
+  }
+
+  :deep(.el-input__inner) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.ac-status {
+  :deep(.el-select__wrapper) {
+    box-shadow: none;
+    background: transparent;
+  }
+
+  &.is-ok :deep(.el-select__selected-item) { color: var(--el-color-success); }
+  &.is-bad :deep(.el-select__selected-item) { color: var(--el-color-danger); }
+  &.is-warn :deep(.el-select__selected-item) { color: var(--el-color-warning); }
+}
+
+.ac-pagination {
   display: flex;
-  justify-content: end;
+  justify-content: flex-end;
+  padding: 14px 16px 20px;
 }
 
-.sync-guide {
-  display: grid;
-  gap: 14px;
-}
-
-.sync-card {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: center;
-  padding: 13px 14px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 12px;
-  background: var(--extra-light-fill);
-
-  p {
-    margin: 6px 0 0;
-    word-break: break-all;
-    color: var(--el-text-color-secondary);
-  }
-}
-
-.sync-note {
-  display: grid;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--el-color-primary-light-9);
-
-  p {
-    margin: 0;
-    line-height: 1.7;
-  }
-
-  code {
-    padding: 2px 6px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.7);
-  }
-}
-
-.example-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.sync-example {
-  margin: 0;
-  max-height: 260px;
-  overflow: auto;
-  padding: 14px;
-  border-radius: 12px;
-  color: #dbeafe;
-  background: #0f172a;
-}
-
-:deep(.sync-dialog) {
-  width: min(720px, calc(100vw - 34px));
-}
-
-:deep(.export-dialog) {
-  width: min(760px, calc(100vw - 34px));
-}
-
-.export-result {
-  display: grid;
-  gap: 12px;
-
-  p {
-    margin: 0;
-    color: var(--el-text-color-secondary);
-  }
-
-  :deep(textarea) {
-    font-family: Consolas, "Courier New", monospace;
-    line-height: 1.55;
-  }
-}
-
-@media (max-width: 860px) {
-  .search-input,
-  .select,
-  .select.small,
-  .select.creator {
-    width: calc(50vw - 28px);
-  }
-}
-
-@media (max-width: 520px) {
-  .search-input,
-  .select,
-  .select.small,
-  .select.creator {
-    width: 100%;
-  }
+.export-result p {
+  margin: 0 0 10px;
+  color: var(--el-text-color-secondary);
 }
 </style>

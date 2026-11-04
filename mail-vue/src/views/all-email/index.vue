@@ -1,86 +1,116 @@
 <template>
-  <div class="email-list-box">
-    <emailScroll ref="sysEmailScroll"
-                 :get-emailList="getEmailList"
-                 :email-delete="allEmailDelete"
-                 :star-add="starAdd"
-                 :star-cancel="starCancel"
-                 :show-star="false"
-                 show-user-info
-                 show-status
-                 actionLeft="4px"
-                 :show-account-icon="false"
-                 :time-sort="params.timeSort"
-                 :item-height="65"
-                 @jump="jumpContent"
-                 @refresh-before="refreshBefore"
-                 @right-search="rightSearch"
-                 :type="'all-email'"
-
-    >
-      <template #first>
-        <el-input
-            v-model="searchValue"
-            :placeholder="$t('searchByContent')"
-            class="search-input"
-        >
-          <template #prefix>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  v-model="params.searchType"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option key="3" :label="$t('sender')" :value="'name'"/>
-                <el-option key="4" :label="$t('subject')" :value="'subject'"/>
-                <el-option key="1" :label="$t('user')" :value="'user'"/>
-                <el-option key="2" :label="$t('selectEmail')" :value="'account'"/>
-              </el-select>
-              <div class="search-type">
-                <span>{{ selectTitle }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-              </div>
-            </div>
+  <div class="ae-page">
+    <div class="ae-toolbar">
+      <div class="ae-row">
+        <el-input v-model="searchValue" clearable class="ae-search" :placeholder="searchPlaceholder" @keyup.enter="search" @clear="search">
+          <template #prepend>
+            <el-select v-model="params.searchType" class="ae-type">
+              <el-option label="收件邮箱" value="account"/>
+              <el-option label="发件人" value="name"/>
+              <el-option label="标题" value="subject"/>
+            </el-select>
           </template>
         </el-input>
-        <el-select v-model="params.type" placeholder="Select" class="status-select" @change="typeSelectChange">
-          <el-option key="1" :label="$t('all')" value="all"/>
-          <el-option key="3" :label="$t('received')" value="receive"/>
-          <el-option key="2" :label="$t('sent')" value="send"/>
-          <el-option key="4" :label="$t('selectDeleted')" value="delete"/>
-          <el-option key="4" :label="$t('noRecipientTitle')" value="noone"/>
+        <el-select v-model="params.type" class="ae-select" @change="search">
+          <el-option label="收到的" value="receive"/>
+          <el-option label="发出的" value="send"/>
+          <el-option label="全部" value="all"/>
+          <el-option label="已删除" value="delete"/>
+          <el-option label="无人收件" value="noone"/>
         </el-select>
-        <Icon class="icon" icon="iconoir:search" @click="search" width="20" height="20"/>
-        <Icon class="icon" @click="changeTimeSort" icon="material-symbols-light:timer-arrow-down-outline"
-              v-if="params.timeSort === 0" width="28" height="28"/>
-        <Icon class="icon" @click="changeTimeSort" icon="material-symbols-light:timer-arrow-up-outline" v-else
-              width="28" height="28"/>
-        <Icon class="icon clear" icon="fluent:broom-sparkle-16-regular" width="22" height="22" @click="openBathDelete"/>
-      </template>
-    </emailScroll>
-    <el-dialog v-model="showBathDelete" :title="$t('clearEmail')" width="335"
-               @closed="closedClear">
+        <el-button @click="search">搜索</el-button>
+        <el-tooltip :content="params.timeSort ? '当前：最早的在前' : '当前：最新的在前'">
+          <el-button circle @click="changeTimeSort">
+            <Icon :icon="params.timeSort ? 'material-symbols-light:timer-arrow-up-outline' : 'material-symbols-light:timer-arrow-down-outline'" width="20" height="20"/>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="清空筛选并刷新"><el-button circle @click="refresh"><Icon icon="ion:reload" width="15" height="15"/></el-button></el-tooltip>
+      </div>
+      <div class="ae-row">
+        <span class="ae-count" v-if="total">共 {{ total.toLocaleString() }} 封</span>
+        <el-button type="danger" plain :disabled="selected.length === 0" @click="deleteSelected">
+          删除{{ selected.length ? ` (${selected.length})` : '' }}
+        </el-button>
+        <el-button @click="showBathDelete = true">
+          <Icon icon="fluent:broom-sparkle-16-regular" width="16" height="16"/>
+          <span>按条件清理</span>
+        </el-button>
+      </div>
+    </div>
+
+    <el-scrollbar ref="scrollbarRef" class="ae-scroll">
+      <el-table
+          v-loading="loading && list.length === 0"
+          :data="list"
+          row-key="emailId"
+          :empty-text="loading ? '' : '没有邮件'"
+          style="width: 100%;"
+          @row-click="openEmail"
+          @selection-change="rows => selected = rows"
+      >
+        <el-table-column type="selection" width="42"/>
+        <el-table-column label="时间" width="128">
+          <template #default="{row}">
+            <span class="ae-time" :title="fullTime(row.createTime)">{{ shortTime(row.createTime) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="发件人" min-width="190">
+          <template #default="{row}">
+            <div class="ae-from">
+              <span class="ae-from-name">{{ row.name || row.sendEmail }}</span>
+              <span class="ae-from-mail">{{ row.sendEmail }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="收件邮箱" min-width="190">
+          <template #default="{row}">
+            <span class="ae-to" :title="row.toEmail">{{ row.toEmail || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="标题" min-width="280">
+          <template #default="{row}">
+            <div class="ae-subject">
+              <el-tag v-if="row.type === 1" size="small" type="info">发出</el-tag>
+              <el-tag v-if="row.isSpam === 1" size="small" type="warning">垃圾</el-tag>
+              <span class="ae-subject-text" :title="row.subject">{{ row.subject || '(无标题)' }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="验证码" width="120">
+          <template #default="{row}">
+            <span v-if="row.code" class="ae-code" title="点击复制" @click.stop="copyCode(row.code)">{{ row.code }}</span>
+            <span v-else class="ae-muted">—</span>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="ae-more">
+        <el-button v-if="hasMore" :loading="loading" @click="loadMore">加载更多</el-button>
+        <span v-else-if="list.length" class="ae-muted">已经到底了</span>
+      </div>
+    </el-scrollbar>
+
+    <el-dialog v-model="showBathDelete" title="按条件清理邮件" width="360" @closed="closedClear">
       <div class="clear-email">
-        <el-input v-model="clearParams.sendName" :placeholder="$t('sender')"/>
-        <el-input v-model="clearParams.subject" :placeholder="$t('subject')"/>
-        <el-input v-model="clearParams.sendEmail" :placeholder="$t('sendEmailAddress')"/>
-        <el-input v-model="clearParams.toEmail" :placeholder="$t('toEmail')"/>
+        <el-input v-model="clearParams.sendName" placeholder="发件人名称"/>
+        <el-input v-model="clearParams.subject" placeholder="标题"/>
+        <el-input v-model="clearParams.sendEmail" placeholder="发件人邮箱"/>
+        <el-input v-model="clearParams.toEmail" placeholder="收件邮箱"/>
         <el-date-picker popper-class="my-date-picker"
                         v-model="clearTime"
                         type="daterange"
                         :teleported="false"
                         unlink-panels
-                        :range-separator="t('to')"
+                        range-separator="至"
                         size="default"
         />
         <div class="clear-button">
           <el-select v-model="clearParams.type" style="width: 200px">
-            <el-option key="eq" :label="t('equal')" value="eq"/>
-            <el-option key="left" :label="t('leading')" value="left"/>
-            <el-option key="include" :label="t('include')" value="include"/>
+            <el-option label="完全相同" value="eq"/>
+            <el-option label="开头匹配" value="left"/>
+            <el-option label="包含" value="include"/>
           </el-select>
-          <el-button :loading="clearLoading" type="primary" @click="batchDelete">{{ t('clear') }}</el-button>
+          <el-button :loading="clearLoading" type="primary" @click="batchDelete">清理</el-button>
         </div>
       </div>
     </el-dialog>
@@ -88,55 +118,41 @@
 </template>
 
 <script setup>
-import {starAdd, starCancel} from "@/request/star.js";
-import emailScroll from "@/components/email-scroll/index.vue"
-import {computed, defineOptions, reactive, ref, watch, onMounted} from "vue";
-import {useEmailStore} from "@/store/email.js";
-import {
-  allEmailList,
-  allEmailDelete,
-  allEmailBatchDelete,
-  allEmailLatest
-} from "@/request/all-email.js";
-import {Icon} from "@iconify/vue";
-import router from "@/router/index.js";
-import {useI18n} from 'vue-i18n';
-import {toUtc} from "@/utils/day.js";
-import {sleep} from "@/utils/time-utils.js";
-import {useSettingStore} from "@/store/setting.js";
-import { useRoute } from 'vue-router'
+import {computed, defineOptions, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {useRoute} from 'vue-router'
+import {Icon} from '@iconify/vue'
+import router from '@/router/index.js'
+import {useEmailStore} from '@/store/email.js'
+import {useSettingStore} from '@/store/setting.js'
+import {allEmailBatchDelete, allEmailDelete, allEmailLatest, allEmailList} from '@/request/all-email.js'
+import {toUtc, tzDayjs} from '@/utils/day.js'
+import {sleep} from '@/utils/time-utils.js'
 
 defineOptions({
   name: 'all-email'
 })
 
+const PAGE_SIZE = 50
 const route = useRoute()
-const {t} = useI18n();
-const emailStore = useEmailStore();
-const settingStore = useSettingStore();
-const clearTime = ref('')
-const sysEmailScroll = ref({})
+const emailStore = useEmailStore()
+const settingStore = useSettingStore()
+
+const list = ref([])
+const total = ref(0)
+const loading = ref(false)
+const hasMore = ref(false)
+const selected = ref([])
 const searchValue = ref('')
-const mySelect = ref()
+const scrollbarRef = ref(null)
 const showBathDelete = ref(false)
 const clearLoading = ref(false)
-
-onMounted(() => {
-  latest();
-})
-
-const openSelect = () => {
-  mySelect.value.toggleMenu()
-}
+const clearTime = ref('')
+let alive = true
 
 const params = reactive({
   timeSort: 0,
   type: 'receive',
-  userEmail: null,
-  accountEmail: null,
-  name: null,
-  subject: null,
-  searchType: 'name'
+  searchType: 'account'
 })
 
 const clearParams = reactive({
@@ -146,365 +162,325 @@ const clearParams = reactive({
   startTime: '',
   toEmail: '',
   endTime: '',
-  type: 'eq',
+  type: 'eq'
 })
 
-function resetClearParams() {
-  clearParams.subject = ''
-  clearParams.sendEmail = ''
-  clearParams.sendName = ''
-  clearParams.startTime = ''
-  clearParams.toEmail = ''
-  clearParams.endTime = ''
-}
+const searchPlaceholder = computed(() => ({
+  account: '搜索收件邮箱，例如 d351@ntmcn.com',
+  name: '搜索发件人',
+  subject: '搜索标题'
+}[params.searchType] || '搜索'))
 
-function closedClear() {
-  resetClearParams()
-  clearParams.type = 'eq'
-  clearParams.endTime = ''
-  clearTime.value = null
-}
-
-const selectTitle = computed(() => {
-  if (params.searchType === 'user') return t('user')
-  if (params.searchType === 'account') return t('selectEmail')
-  if (params.searchType === 'name') return t('sender')
-  if (params.searchType === 'subject') return t('subject')
-})
-
-const paramsStar = localStorage.getItem('all-email-params')
-if (paramsStar) {
-  const locaParams = JSON.parse(paramsStar)
-  params.type = locaParams.type
-  params.timeSort = locaParams.timeSort
-  params.status = locaParams.status
-  params.searchType = locaParams.searchType
-}
-
-watch(() => params, () => {
-  localStorage.setItem('all-email-params', JSON.stringify(params))
-}, {
-  deep: true
-})
-
-function openBathDelete() {
-  showBathDelete.value = true
-}
-
-function batchDelete() {
-
-  if (clearTime.value) {
-    clearParams.startTime = toUtc(clearTime.value[0]).format("YYYY-MM-DD HH:mm:ss")
-    clearParams.endTime = toUtc(clearTime.value[1]).add(1, 'day').format("YYYY-MM-DD HH:mm:ss")
+try {
+  const saved = JSON.parse(localStorage.getItem('all-email-params-v2') || 'null')
+  if (saved) {
+    params.type = saved.type || params.type
+    params.timeSort = Number(saved.timeSort || 0)
+    params.searchType = saved.searchType || params.searchType
   }
+} catch (e) {}
 
-  if (!clearParams.sendEmail && !clearParams.sendName && !clearParams.subject && !clearParams.toEmail && !clearTime.value) {
-    showBathDelete.value = false
-    return
+watch(() => ({...params}), (value) => {
+  try { localStorage.setItem('all-email-params-v2', JSON.stringify(value)) } catch (e) {}
+})
+
+onMounted(() => {
+  load(true)
+  pollLatest()
+})
+
+onBeforeUnmount(() => {
+  alive = false
+})
+
+function buildQuery(emailId) {
+  const query = {emailId, size: PAGE_SIZE, timeSort: params.timeSort, type: params.type}
+  const value = String(searchValue.value || '').trim()
+  if (value) {
+    if (params.searchType === 'account') query.accountEmail = value
+    if (params.searchType === 'name') query.name = value
+    if (params.searchType === 'subject') query.subject = value
   }
-
-  ElMessageBox.confirm(
-      t('delAllConfirm'),
-      {
-        confirmButtonText: t('confirm'),
-        cancelButtonText: t('cancel'),
-        type: 'warning',
-      }
-  ).then(() => {
-    clearLoading.value = true
-
-    allEmailBatchDelete(clearParams).then(() => {
-      ElMessage({
-        message: t('clearSuccess'),
-        type: "success",
-        plain: true
-      })
-      resetClearParams()
-      sysEmailScroll.value.refreshList();
-    }).finally(() => {
-      clearLoading.value = false
-    })
-  })
+  return query
 }
 
-function rightSearch(type, value) {
-  params.searchType = type;
-  searchValue.value = value;
-  search();
+async function load(reset = false) {
+  if (loading.value) return
+  loading.value = true
+  try {
+    const cursor = reset || list.value.length === 0 ? 0 : list.value[list.value.length - 1].emailId
+    const data = await allEmailList(buildQuery(cursor))
+    const rows = data.list || []
+    list.value = reset ? rows : [...list.value, ...rows]
+    total.value = data.total || 0
+    hasMore.value = rows.length === PAGE_SIZE
+    if (reset) scrollbarRef.value?.setScrollTop(0)
+  } catch (e) {
+    // 全局已提示
+  } finally {
+    loading.value = false
+  }
 }
 
-function refreshBefore() {
-  searchValue.value = null
-  params.timeSort = 0
-  params.type = 'receive'
-  params.userEmail = null
-  params.accountEmail = null
-  params.name = null
-  params.subject = null
-  params.searchType = 'name'
+function loadMore() {
+  load(false)
 }
 
 function search() {
+  load(true)
+}
 
-  params.userEmail = null
-  params.accountEmail = null
-  params.name = null
-  params.subject = null
-
-  if (params.searchType === 'user') {
-    params.userEmail = searchValue.value
-  }
-
-  if (params.searchType === 'account') {
-    params.accountEmail = searchValue.value
-  }
-
-  if (params.searchType === 'name') {
-    params.name = searchValue.value
-  }
-
-  if (params.searchType === 'subject') {
-    params.subject = searchValue.value
-  }
-
-  sysEmailScroll.value.refreshList();
+function refresh() {
+  searchValue.value = ''
+  params.type = 'receive'
+  params.timeSort = 0
+  load(true)
 }
 
 function changeTimeSort() {
   params.timeSort = params.timeSort ? 0 : 1
-  search()
+  load(true)
 }
 
-function typeSelectChange() {
-  search()
-}
-
-function jumpContent(email) {
-  emailStore.contentData.email = email
+function openEmail(row) {
+  emailStore.contentData.email = row
   emailStore.contentData.delType = 'physics'
   emailStore.contentData.showStar = false
   emailStore.contentData.showReply = false
   router.push({name: 'content'})
 }
 
-
-function getEmailList(emailId, size) {
-  return allEmailList({emailId, size, ...params})
+function deleteSelected() {
+  if (selected.value.length === 0) return
+  ElMessageBox.confirm(`确认彻底删除选中的 ${selected.value.length} 封邮件？删除后无法恢复。`, {
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    const ids = selected.value.map(row => row.emailId)
+    await allEmailDelete(ids.join(','))
+    const idSet = new Set(ids)
+    list.value = list.value.filter(row => !idSet.has(row.emailId))
+    total.value = Math.max(0, total.value - ids.length)
+    selected.value = []
+    ElMessage({message: '已删除', type: 'success', plain: true})
+  }).catch(() => {})
 }
 
-async function latest() {
+function batchDelete() {
+  if (clearTime.value) {
+    clearParams.startTime = toUtc(clearTime.value[0]).format('YYYY-MM-DD HH:mm:ss')
+    clearParams.endTime = toUtc(clearTime.value[1]).add(1, 'day').format('YYYY-MM-DD HH:mm:ss')
+  }
+  if (!clearParams.sendEmail && !clearParams.sendName && !clearParams.subject && !clearParams.toEmail && !clearTime.value) {
+    showBathDelete.value = false
+    return
+  }
+  ElMessageBox.confirm('确认按这些条件彻底删除邮件？删除后无法恢复。', {
+    confirmButtonText: '清理',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    clearLoading.value = true
+    allEmailBatchDelete(clearParams).then(() => {
+      ElMessage({message: '清理完成', type: 'success', plain: true})
+      showBathDelete.value = false
+      load(true)
+    }).finally(() => {
+      clearLoading.value = false
+    })
+  }).catch(() => {})
+}
 
-  while (true) {
+function closedClear() {
+  Object.assign(clearParams, {subject: '', sendEmail: '', sendName: '', startTime: '', toEmail: '', endTime: '', type: 'eq'})
+  clearTime.value = null
+}
 
-    let autoRefresh = settingStore.settings.autoRefresh;
+async function copyCode(code) {
+  try {
+    await navigator.clipboard.writeText(String(code))
+    ElMessage({message: `已复制 ${code}`, type: 'success', plain: true})
+  } catch (e) {
+    ElMessage({message: '浏览器不允许自动复制', type: 'warning', plain: true})
+  }
+}
 
-    await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 3000);
+function shortTime(value) {
+  if (!value) return '-'
+  const d = tzDayjs(value)
+  const now = tzDayjs()
+  if (d.isSame(now, 'day')) return d.format('HH:mm:ss')
+  if (d.isSame(now, 'year')) return d.format('MM-DD HH:mm')
+  return d.format('YYYY-MM-DD')
+}
 
-    const latestId = sysEmailScroll.value.latestEmail?.emailId
+function fullTime(value) {
+  return value ? tzDayjs(value).format('YYYY-MM-DD HH:mm:ss') : ''
+}
 
-    if (autoRefresh < 2) {
-      continue
-    }
-
-    if (!latestId && latestId !== 0) {
-      continue
-    }
-
-    if (route.name !== 'all-email') {
-      continue
-    }
-
-
-    if (params.type !== 'receive') {
-      continue
-    }
-
+// 有新邮件时自动插到顶部（仅「收到的」+ 最新在前 + 没有搜索时）
+async function pollLatest() {
+  while (alive) {
+    const autoRefresh = Number(settingStore.settings.autoRefresh || 0)
+    await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 5000)
+    if (!alive || autoRefresh < 2 || route.name !== 'all-email') continue
+    if (params.type !== 'receive' || params.timeSort !== 0 || String(searchValue.value || '').trim()) continue
+    const latestId = list.value[0]?.emailId
+    if (!latestId) continue
     try {
-
-      const curTimeSort = params.timeSort
-      let list = await allEmailLatest(latestId)
-
-      if (list.length === 0) {
-        continue
+      const rows = await allEmailLatest(latestId)
+      if (Array.isArray(rows) && rows.length) {
+        const existing = new Set(list.value.map(row => row.emailId))
+        const fresh = rows.filter(row => !existing.has(row.emailId)).sort((a, b) => b.emailId - a.emailId)
+        list.value = [...fresh, ...list.value]
+        total.value += fresh.length
       }
-
-      if (params.type !== 'receive') {
-        continue
-      }
-
-      // 确保回来之后条件没变
-      if (params.timeSort !== curTimeSort) {
-        continue
-      }
-
-      for (let email of list) {
-
-        sysEmailScroll.value.addItem(email)
-        await sleep(50)
-
-      }
-
     } catch (e) {
-      if (e.code === 401 || e.code === 403) {
-        settingStore.settings.autoRefresh = 0;
-      }
-      console.error(e)
+      // 忽略轮询错误
     }
-
   }
 }
-
 </script>
-<style>
 
-@media (max-width: 767px) {
-  .el-date-range-picker .el-picker-panel__body {
-    min-width: auto;
-
-  }
-
-  .my-date-picker::after {
-    content: "";
-    position: absolute; /* 脱离文档流，不会撑开 */
-    left: 0;
-    right: 0;
-    height: 20px;
-    background: transparent; /* 方便看效果 */
-  }
-
-  .el-date-range-picker__content {
-    width: 100%;
-  }
-
-  .el-date-range-picker {
-    width: 300px;
-  }
-
-  .el-tooltip .el-picker_popper {
-    padding-bottom: 200px;
-  }
-
-  .el-date-range-picker__content.is-left {
-    border-right: 0;
-  }
-}
-
-</style>
 <style scoped lang="scss">
-.email-list-box {
+.ae-page {
   height: 100%;
-  width: 100%;
   overflow: hidden;
-}
-
-
-.search {
-  padding-top: 5px;
-  padding-bottom: 5px;
-}
-
-.select {
-  position: absolute;
-  width: 40px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.search-type {
   display: flex;
-  color: var(--el-text-color-regular);
+  flex-direction: column;
 }
 
-:deep(.header-actions) {
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
+.ae-toolbar {
+  padding: 10px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--header-actions-border);
 
-.search-input {
-  width: 100%;
-  max-width: 280px;
-  height: 28px;
-
-  .setting-icon {
-    position: relative;
-    top: 3px;
+  :deep(.el-button > span) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
+}
+
+.ae-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+
+  .el-button + .el-button {
+    margin-left: 0;
+  }
+}
+
+.ae-search {
+  width: min(420px, calc(100vw - 40px));
+}
+
+.ae-type {
+  width: 96px;
+}
+
+.ae-select {
+  width: 110px;
+}
+
+.ae-count {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.ae-scroll {
+  flex: 1;
+  min-height: 0;
+
+  :deep(.el-table__row) {
+    cursor: pointer;
+  }
+}
+
+.ae-time {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ae-from {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.ae-from-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ae-from-mail, .ae-muted {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ae-to {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.ae-subject {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ae-subject-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ae-code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: .05em;
+  color: var(--el-color-primary);
+  cursor: copy;
+  padding: 2px 6px;
+  border-radius: 4px;
+
+  &:hover {
+    background: var(--el-color-primary-light-9);
+  }
+}
+
+.ae-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 24px;
 }
 
 .clear-email {
   display: flex;
   flex-direction: column;
-  gap: 15px;
-}
+  gap: 12px;
 
-.clear-button {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-
-  .el-button {
-    width: 100%;
-  }
-}
-
-.status-select {
-  margin-bottom: 2px;
-  width: 102px;
-
-  :deep(.el-select__wrapper) {
-    min-height: 28px;
-  }
-}
-
-.input-with-select {
-  max-width: 200px;
-  border-radius: 0 4px 4px 0;
-}
-
-:deep(.input-with-select .el-input-group__append) {
-  background-color: var(--el-fill-color-blank);
-}
-
-:deep(.el-select__wrapper) {
-  padding: 2px 10px;
-  min-height: 28px;
-}
-
-:deep(.el-date-editor.el-input__wrapper) {
-  width: 303px;
-}
-
-.icon {
-  cursor: pointer;
-}
-
-.clear {
-  @media (max-width: 419px) {
-    position: absolute;
-    top: 41px;
-    left: 242px;
-  }
-}
-
-:deep(.reload) {
-  @media (max-width: 419px) {
-    position: absolute;
-    top: 42px;
-    left: 208px;
-  }
-}
-
-:deep(.delete) {
-  @media (max-width: 456px) {
-    position: absolute;
-    top: 43px;
-    left: 294px;
-  }
-
-  @media (max-width: 419px) {
-    position: absolute;
-    top: 43px;
-    left: 282px;
+  .clear-button {
+    display: flex;
+    gap: 10px;
   }
 }
 </style>
