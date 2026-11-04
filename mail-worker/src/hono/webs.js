@@ -24,4 +24,5 @@ import '../api/oauth-api'
 import '../api/local-agent-api'
 import '../api/asset-api'
 import '../api/desktop-sync-api'
+import '../api/batch-api'
 export default app;

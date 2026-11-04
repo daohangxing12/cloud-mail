@@ -3,6 +3,7 @@
     <div class="header-actions">
       <Icon class="icon" icon="ion:add-outline" width="23" height="23" title="新增子邮箱" @click="openAdd"/>
       <Icon class="icon" icon="fluent:mail-inbox-add-20-regular" width="22" height="22" title="批量导入" @click="openImport"/>
+      <Icon class="icon" icon="fluent:link-multiple-20-regular" width="22" height="22" title="批量建号 / 接码链接" @click="openBatchTool"/>
       <div class="search">
         <el-input v-model="params.email" clearable class="search-input" placeholder="搜索子邮箱" @keyup.enter="search" @clear="search"/>
       </div>
@@ -599,13 +600,17 @@ function openTikTok(row) {
   window.open(row.tiktokUrl, '_blank', 'noopener,noreferrer')
 }
 
+function openBatchTool() {
+  window.open('/batch-tool', '_blank')
+}
+
 function buildCodeUrl(email, token, format = '') {
   const query = new URLSearchParams({
     username: email,
     token
   })
   if (format) query.set('format', format)
-  return `https://212202.xyz/getNewTkMailCode?${query.toString()}`
+  return `https://mail.ntmcn.com/getNewTkMailCode?${query.toString()}`
 }
 
 async function copyText(text) {

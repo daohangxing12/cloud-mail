@@ -6,6 +6,7 @@ import emailService from './service/email-service';
 import kvObjService from './service/kv-obj-service';
 import oauthService from "./service/oauth-service";
 import analysisService from './service/analysis-service';
+import batchToolHtml from './batch-tool/tool-html';
 export default {
 	 async fetch(req, env, ctx) {
 
@@ -15,6 +16,10 @@ export default {
 			url.pathname = url.pathname.replace('/api', '')
 			req = new Request(url.toString(), req)
 			return app.fetch(req, env, ctx);
+		}
+
+		if (url.pathname === '/batch-tool' || url.pathname === '/batch-tool/') {
+			return new Response(batchToolHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 		}
 
 		if (url.pathname === '/getNewTkMailCode') {
