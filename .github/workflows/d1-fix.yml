@@ -1,0 +1,31 @@
+name: 🧰 D1 一次性数据维护
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasks:
+        description: "remarks,admin"
+        required: true
+        default: "remarks,admin"
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+      TASKS: ${{ inputs.tasks }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 准备 wrangler
+        working-directory: ./mail-worker
+        run: |
+          npm i --no-save --silent wrangler@4
+          printf 'name = "d1-fix"\n[[d1_databases]]\nbinding = "db"\ndatabase_name = "cloud-mail-db"\ndatabase_id = "4fcbeda4-da5a-4577-9b16-e50fe8dfb78c"\n' > wrangler.toml
+      - name: 执行
+        working-directory: ./mail-worker
+        run: node ../.github/scripts/d1-fix.mjs
