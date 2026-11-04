@@ -133,7 +133,6 @@ import dayjs from "dayjs";
 import {useI18n} from "vue-i18n";
 import router from "@/router/index.js";
 import {ElMessageBox} from "element-plus";
-import {accountList} from "@/request/account.js";
 import {sendSenderList} from "@/request/resend-domain.js";
 
 defineExpose({
@@ -343,38 +342,12 @@ async function loadSenderAccounts() {
         return senderAccounts.value
       }
     } catch (e) {
-      console.warn('读取发件地址配置失败，改用全部邮箱', e)
+      console.warn('读取发件地址配置失败', e)
     }
 
-    const allAccounts = []
-    let cursorAccountId = 0
-    let cursorSort = 9999999999
-
-    for (let page = 0; page < 1000; page++) {
-      const result = await accountList(cursorAccountId, 30, cursorSort)
-      const rows = Array.isArray(result) ? result : []
-      if (rows.length === 0) break
-
-      allAccounts.push(...rows)
-      if (rows.length < 30) break
-
-      const last = rows[rows.length - 1]
-      const nextAccountId = Number(last.accountId)
-      const nextSort = Number(last.sort)
-      if (!Number.isFinite(nextAccountId) || !Number.isFinite(nextSort)) break
-      if (nextAccountId === cursorAccountId && nextSort === cursorSort) break
-
-      cursorAccountId = nextAccountId
-      cursorSort = nextSort
-    }
-
-    const uniqueAccounts = new Map()
-    allAccounts.forEach(account => {
-      if (account?.accountId && isEmail(account.email)) {
-        uniqueAccounts.set(String(account.accountId), account)
-      }
-    })
-    senderAccounts.value = Array.from(uniqueAccounts.values())
+    // 没有配置发件地址：只显示自己的主账号，不再列出全部子邮箱
+    const own = getDefaultSender()
+    senderAccounts.value = own ? [own] : []
     senderAccountsLoaded = true
     return senderAccounts.value
   })().finally(() => {

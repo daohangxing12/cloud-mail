@@ -6,7 +6,7 @@
           <Icon icon="ion:add-outline" width="16" height="16"/>
           <span>新增</span>
         </el-button>
-        <el-button @click="openBatchTool">
+        <el-button @click="openBatchCreate">
           <Icon icon="fluent:link-multiple-20-regular" width="16" height="16"/>
           <span>批量建号</span>
         </el-button>
@@ -38,6 +38,21 @@
             <el-dropdown-menu>
               <el-dropdown-item command="links">邮箱----接码链接（TXT）</el-dropdown-item>
               <el-dropdown-item command="csv">表格（CSV）</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-dropdown trigger="click" :disabled="selectedCount === 0" @command="batchManage">
+          <el-button :disabled="selectedCount === 0">
+            <span>批量管理{{ selectedCount ? ` (${selectedCount})` : '' }}</span>
+            <Icon icon="mingcute:down-small-fill" width="16" height="16"/>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="copy">复制所选：邮箱----接码链接</el-dropdown-item>
+              <el-dropdown-item command="download">下载所选 TXT</el-dropdown-item>
+              <el-dropdown-item command="missing" divided>给没有链接的生成链接</el-dropdown-item>
+              <el-dropdown-item command="reset">重置链接（旧链接失效）</el-dropdown-item>
+              <el-dropdown-item command="revoke">撤销链接</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -154,6 +169,39 @@
       </div>
     </el-dialog>
 
+    <el-dialog v-model="batchShow" title="批量建号" width="560" @closed="resetBatch">
+      <div class="sa-dialog">
+        <div class="sa-batch-row">
+          <el-select v-model="batchForm.suffix" class="sa-suffix">
+            <el-option v-for="item in domainOptions" :key="item" :label="item" :value="item"/>
+          </el-select>
+          <el-radio-group v-model="batchForm.mode">
+            <el-radio-button value="random">随机生成</el-radio-button>
+            <el-radio-button value="names">指定用户名</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div v-if="batchForm.mode === 'random'" class="sa-batch-row">
+          <div class="sa-field"><label>数量</label><el-input-number v-model="batchForm.count" :min="1" :max="2000"/></div>
+          <div class="sa-field"><label>前缀（可空）</label><el-input v-model.trim="batchForm.prefix" placeholder="如 tk" style="width: 120px"/></div>
+          <div class="sa-field"><label>随机位数</label><el-input-number v-model="batchForm.length" :min="4" :max="20"/></div>
+        </div>
+        <el-input v-else v-model="batchForm.names" type="textarea" :autosize="{ minRows: 6, maxRows: 12 }"
+                  placeholder="每行一个：用户名或完整邮箱"/>
+        <el-checkbox v-model="batchForm.autoDownload">完成后自动下载 TXT（邮箱----接码链接）</el-checkbox>
+        <el-button class="btn" type="primary" :loading="batchLoading" @click="submitBatch">
+          {{ batchLoading ? batchProgress : '创建并生成接码链接' }}
+        </el-button>
+        <template v-if="batchResult.length">
+          <p class="sa-tip">{{ batchSummary }}</p>
+          <el-input :model-value="batchText" type="textarea" :rows="8" readonly/>
+          <div class="sa-batch-row">
+            <el-button @click="copyText(batchText, '已复制')">复制</el-button>
+            <el-button @click="download(batchText, `接码链接-${today()}.txt`, 'text/plain;charset=utf-8')">下载 TXT</el-button>
+          </div>
+        </template>
+      </div>
+    </el-dialog>
+
     <el-dialog v-model="importShow" title="批量导入子邮箱" width="460" @closed="resetImportForm">
       <div class="sa-dialog">
         <p class="sa-tip">每行一个；只填前缀时自动拼接下面的域名，单次最多 200 个。要同时生成接码链接请用「批量建号」。</p>
@@ -186,6 +234,8 @@ import {isEmail} from '@/utils/verify-utils.js'
 import {useSettingStore} from '@/store/setting.js'
 import {
   subAccountAdd,
+  subAccountBatchCreate,
+  subAccountBatchToken,
   subAccountDelete,
   subAccountGenToken,
   subAccountImport,
@@ -347,6 +397,107 @@ function openImport() {
 
 function openBatchTool() {
   window.open('/batch-tool', '_blank')
+}
+
+// ===== 批量建号（页内弹窗）=====
+const batchShow = ref(false)
+const batchLoading = ref(false)
+const batchProgress = ref('')
+const batchResult = ref([])
+const batchForm = reactive({suffix: '', mode: 'random', count: 20, prefix: '', length: 8, names: '', autoDownload: true})
+
+watch(domainOptions, (list) => {
+  if (!batchForm.suffix && list.length > 0) batchForm.suffix = list[0]
+}, {immediate: true})
+
+const batchText = computed(() => batchResult.value.filter(x => x.link).map(x => `${x.email}----${x.link}`).join('\n'))
+const batchSummary = computed(() => {
+  const cnt = {}
+  batchResult.value.forEach(x => { cnt[x.status] = (cnt[x.status] || 0) + 1 })
+  const parts = [`新建 ${cnt.created || 0}`]
+  if (cnt.restored) parts.push(`恢复 ${cnt.restored}`)
+  if (cnt.exists) parts.push(`已存在 ${cnt.exists}`)
+  if (cnt.invalid) parts.push(`格式不对 ${cnt.invalid}`)
+  if (cnt.failed) parts.push(`失败 ${cnt.failed}`)
+  return parts.join('，')
+})
+
+function openBatchCreate() {
+  batchShow.value = true
+}
+
+function resetBatch() {
+  if (batchLoading.value) return
+  batchResult.value = []
+}
+
+async function submitBatch() {
+  const domain = cleanDomain(batchForm.suffix)
+  if (!domain) return
+  const jobs = []
+  if (batchForm.mode === 'names') {
+    const names = String(batchForm.names || '').split(/[\s,;，；]+/).filter(Boolean)
+    if (!names.length) {
+      ElMessage({message: '请填写用户名', type: 'warning', plain: true})
+      return
+    }
+    for (let i = 0; i < names.length; i += 100) jobs.push({names: names.slice(i, i + 100).join('\n')})
+  } else {
+    for (let left = Number(batchForm.count || 0); left > 0; left -= 100) {
+      jobs.push({count: Math.min(100, left), prefix: batchForm.prefix, length: batchForm.length})
+    }
+  }
+  batchLoading.value = true
+  batchResult.value = []
+  try {
+    for (let i = 0; i < jobs.length; i++) {
+      batchProgress.value = `处理中 ${i + 1}/${jobs.length} 批…`
+      const data = await subAccountBatchCreate({...jobs[i], domain, base: CODE_BASE})
+      batchResult.value = [...batchResult.value, ...(data.list || [])]
+    }
+    ElMessage({message: `完成：${batchSummary.value}`, type: 'success', plain: true})
+    if (batchForm.autoDownload && batchText.value) download(batchText.value, `接码链接-${domain}-${today()}.txt`, 'text/plain;charset=utf-8')
+    getList(true)
+  } catch (e) {
+    // 已提示；已完成的部分保留在结果里
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+// ===== 勾选后批量管理 =====
+async function batchManage(command) {
+  const rows = tableRef.value.getSelectionRows?.() || []
+  if (!rows.length) return
+  const ids = rows.map(row => row.accountId)
+  if (command === 'copy' || command === 'download') {
+    const data = await subAccountBatchToken(ids, 'get')
+    const list = (data.list || []).filter(x => x.link)
+    if (!list.length) {
+      ElMessage({message: '所选邮箱都还没有接码链接，请先「给没有链接的生成链接」', type: 'warning', plain: true})
+      return
+    }
+    const text = list.map(x => `${x.email}----${x.link}`).join('\n')
+    const skipped = rows.length - list.length
+    if (command === 'copy') await copyText(text, `已复制 ${list.length} 条${skipped ? `（${skipped} 个没有链接）` : ''}`)
+    else download(text, `接码链接-${today()}.txt`, 'text/plain;charset=utf-8')
+    return
+  }
+  const labels = {missing: '给没有链接的邮箱生成链接', reset: '重置链接，旧链接会立即失效', revoke: '撤销链接，撤销后这些链接无法再取码'}
+  try {
+    await ElMessageBox.confirm(`确认对选中的 ${rows.length} 个邮箱${labels[command]}？`, {confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning'})
+  } catch (e) {
+    return
+  }
+  const data = await subAccountBatchToken(ids, command)
+  const list = data.list || []
+  const changed = list.filter(x => ['created', 'reset', 'revoked'].includes(x.status)).length
+  ElMessage({message: `已处理 ${changed} 个`, type: 'success', plain: true})
+  if (command !== 'revoke') {
+    const text = list.filter(x => x.link).map(x => `${x.email}----${x.link}`).join('\n')
+    if (text) await copyText(text, `已处理 ${changed} 个，所选链接已复制`)
+  }
+  getList(false)
 }
 
 function submitImport() {
@@ -759,6 +910,13 @@ function isOwnerAccount(row) {
 .sa-suffix {
   width: 170px;
   flex-shrink: 0;
+}
+
+.sa-batch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
 }
 
 .sa-tip {

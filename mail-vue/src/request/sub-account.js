@@ -39,3 +39,11 @@ export function subAccountGenToken(accountId) {
 export function subAccountDelete(accountIds) {
     return http.delete('/subAccount/delete', {params: {accountIds: accountIds + ''}})
 }
+
+export function subAccountBatchCreate(form) {
+    return http.post('/subAccount/batchCreate', form)
+}
+
+export function subAccountBatchToken(accountIds, mode) {
+    return http.post('/subAccount/batchToken', {accountIds, mode})
+}

@@ -5,7 +5,7 @@ import permService from '../service/perm-service';
 const LINK_BASE = 'https://mail.ntmcn.com';
 const TOKEN_PREFIX = 'sub_account_token:';
 const MAX_PER_CALL = 100;
-const json = (c, data, code = 200, message = 'success') => c.json({ code, message, data }, code === 200 ? 200 : code);
+const json = (c, data, code = 200, message = 'success') => c.json({ code, message, data });
 const domains = (env) => {
 	let d = env.domain;
 	if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = d.split(','); } }
@@ -169,3 +169,39 @@ app.post('/subAccount/assetReport', async (c) => {
 	});
 });
 
+
+// 勾选的子邮箱批量处理接码链接：missing=只给没有的生成，reset=全部重新生成（旧链接失效），revoke=撤销，get=只读取
+app.post('/subAccount/batchToken', async (c) => {
+	const p = await c.req.json().catch(() => ({}));
+	const mode = ['missing', 'reset', 'revoke', 'get'].includes(p.mode) ? p.mode : 'get';
+	const denied = await requireAdmin(c, mode === 'get' ? 'user:query' : 'user:set-status');
+	if (denied) return json(c, null, 403, '没有权限');
+	const base = cleanBase(p.base);
+	const ids = [...new Set((Array.isArray(p.accountIds) ? p.accountIds : String(p.accountIds || '').split(','))
+		.map(x => Number(x)).filter(x => Number.isInteger(x) && x > 0))];
+	if (!ids.length) return json(c, null, 400, '没有选择邮箱');
+	if (ids.length > 500) return json(c, null, 400, '一次最多 500 个');
+	const placeholders = ids.map(() => '?').join(',');
+	const { results } = await c.env.db.prepare(`SELECT account_id AS accountId, email FROM account WHERE account_id IN (${placeholders})`).bind(...ids).all();
+	const list = [];
+	for (const r of results || []) {
+		const email = String(r.email).toLowerCase();
+		const key = TOKEN_PREFIX + email;
+		try {
+			let token = await c.env.kv.get(key);
+			let status = token ? 'kept' : 'none';
+			if (mode === 'revoke') {
+				if (token) { await c.env.kv.delete(key); status = 'revoked'; } else { status = 'none'; }
+				token = '';
+			} else if (mode === 'reset' || (mode === 'missing' && !token)) {
+				token = newToken();
+				await c.env.kv.put(key, token);
+				status = mode === 'reset' ? 'reset' : 'created';
+			}
+			list.push({ accountId: r.accountId, email, status, token: token || '', link: token ? linkOf(base, email, token) : '' });
+		} catch (e) {
+			list.push({ accountId: r.accountId, email, status: 'failed', message: String(e.message || e).slice(0, 200) });
+		}
+	}
+	return json(c, { list, base });
+});
