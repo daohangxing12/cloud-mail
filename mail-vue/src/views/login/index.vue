@@ -237,7 +237,8 @@ const loginOpacity = computed(() => {
   return uiStore.dark ? `rgba(0, 0, 0, ${opacity})` : `rgba(255, 255, 255, ${opacity})`
 })
 
-const hideLoginDomain = computed(() => settingStore.settings.loginDomain === 1)
+// 登录页不再显示邮箱后缀：直接输入完整邮箱，或输入 admin
+const hideLoginDomain = computed(() => true)
 
 const background = computed(() => {
 
@@ -374,7 +375,7 @@ const submit = () => {
 
   let email = getFullEmail(form.email);
 
-  if (!isEmail(email)) {
+  if (!isEmail(email) && email.includes('@')) {
     ElMessage({
       message: t('notEmailMsg'),
       type: 'error',

@@ -262,6 +262,10 @@ const loginService = {
 		if (!account || account.includes('@')) {
 			return account;
 		}
+		// 输入 admin 直接登录管理员账号（环境变量 admin）
+		if (account === 'admin' && c.env.admin) {
+			return String(c.env.admin).trim().toLowerCase();
+		}
 		const domains = Array.isArray(c.env.domain) ? c.env.domain : [];
 		const defaultDomain = domains.includes('ntmcn.com') ? 'ntmcn.com' : domains[0];
 		return defaultDomain ? `${account}@${defaultDomain}` : account;
