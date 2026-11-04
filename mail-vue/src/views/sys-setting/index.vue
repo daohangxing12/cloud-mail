@@ -190,6 +190,8 @@
                              type="primary">
                     <Icon icon="material-symbols:add-rounded" width="16" height="16"/>
                   </el-button>
+                  <el-button class="opt-button" style="margin-top: 0" @click="openSendDomain" size="small"
+                             type="primary">发信域名</el-button>
                 </div>
               </div>
               <div class="setting-item">
@@ -651,6 +653,49 @@
           </div>
         </template>
       </el-dialog>
+      <el-dialog v-model="sendDomainShow" title="发信域名（Resend）" width="680">
+        <div class="send-domain">
+          <div class="sd-row">
+            <el-input v-model="sendKeyInput" type="password" show-password
+                      :placeholder="sendInfo.hasKey ? '已保存通用密钥，填写新的可替换' : '粘贴 Resend 密钥（re_ 开头），所有域名共用'"/>
+            <el-button type="primary" :loading="sendLoading" @click="saveSendKey">保存密钥</el-button>
+          </div>
+          <div class="sd-row">
+            <el-input v-model="sendDomainInput" placeholder="要发信的域名，例如 ntmcn.com" @keyup.enter="addSendDomain"/>
+            <el-button type="primary" :loading="sendLoading" :disabled="!sendInfo.hasKey" @click="addSendDomain">添加域名</el-button>
+            <el-button :loading="sendLoading" @click="loadSendDomains">刷新</el-button>
+          </div>
+          <p class="sd-hint">{{ sendInfo.autoDns ? '添加后会自动在 Cloudflare 写入 DNS 记录，几分钟后点「验证」。' : '添加后去 Resend 网站该域名页面点「Auto configure」，或按「记录」里的内容在 Cloudflare 手动添加，然后回来点「验证」。' }}</p>
+          <el-table :data="sendInfo.list" size="small" empty-text="还没有发信域名">
+            <el-table-column prop="name" label="域名" min-width="150"/>
+            <el-table-column label="状态" width="110">
+              <template #default="{row}">
+                <el-tag size="small" :type="row.status === 'verified' ? 'success' : (row.status === 'failed' ? 'danger' : 'warning')">
+                  {{ sendStatusText(row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="230">
+              <template #default="{row}">
+                <el-button size="small" link type="primary" @click="verifySendDomain(row)">验证</el-button>
+                <el-button size="small" link type="primary" @click="showSendRecords(row)">记录</el-button>
+                <el-button v-if="sendInfo.autoDns && row.status !== 'verified'" size="small" link type="primary" @click="applySendDns(row)">写入 DNS</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-if="sendRecords.name" class="sd-records">
+            <div class="sd-title">{{ sendRecords.name }} 需要的 DNS 记录</div>
+            <el-table :data="sendRecords.records" size="small">
+              <el-table-column prop="type" label="类型" width="70"/>
+              <el-table-column prop="name" label="名称" width="150" :show-overflow-tooltip="true"/>
+              <el-table-column prop="value" label="内容" min-width="200" :show-overflow-tooltip="true"/>
+              <el-table-column label="状态" width="90">
+                <template #default="{row}">{{ sendStatusText(row.status) }}</template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+      </el-dialog>
       <el-dialog class="resend-table" v-model="showResendList" :title="$t('resendTokenList')">
         <el-table :data="resendList">
           <el-table-column :min-width="emailColumnWidth" property="key" :label="$t('domain')"
@@ -831,6 +876,7 @@
 <script setup>
 import {computed, defineOptions, nextTick, reactive, ref} from "vue";
 import {deleteBackground, setBackground, setBlackList, settingQuery, settingSet} from "@/request/setting.js";
+import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey} from "@/request/resend-domain.js";
 import {useSettingStore} from "@/store/setting.js";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
@@ -1563,6 +1609,101 @@ function editSetting(settingForm, refreshStatus = true) {
     clearS3Loading.value = false
   })
 }
+// ===== 发信域名（Resend）=====
+const sendDomainShow = ref(false)
+const sendLoading = ref(false)
+const sendKeyInput = ref('')
+const sendDomainInput = ref('')
+const sendInfo = reactive({hasKey: false, autoDns: false, list: []})
+const sendRecords = reactive({name: '', records: []})
+
+function sendStatusText(status) {
+  return {verified: '已验证', pending: '验证中', not_started: '未开始', failed: '失败', temporary_failure: '暂时失败'}[status] || (status || '-')
+}
+
+async function loadSendDomains() {
+  sendLoading.value = true
+  try {
+    const data = await resendDomainList()
+    Object.assign(sendInfo, data)
+  } catch (e) {} finally {
+    sendLoading.value = false
+  }
+}
+
+function openSendDomain() {
+  sendDomainShow.value = true
+  sendRecords.name = ''
+  loadSendDomains()
+}
+
+async function saveSendKey() {
+  sendLoading.value = true
+  try {
+    await resendSaveKey(sendKeyInput.value.trim())
+    sendKeyInput.value = ''
+    ElMessage({message: '密钥已保存，所有域名共用', type: 'success', plain: true})
+    await loadSendDomains()
+  } catch (e) {} finally {
+    sendLoading.value = false
+  }
+}
+
+async function addSendDomain() {
+  const domain = sendDomainInput.value.trim()
+  if (!domain) return
+  sendLoading.value = true
+  try {
+    const data = await resendDomainAdd(domain)
+    sendDomainInput.value = ''
+    sendRecords.name = data.name
+    sendRecords.records = data.records || []
+    if (data.dnsError) {
+      ElMessage({message: data.dnsError, type: 'warning', plain: true})
+    } else {
+      const failed = (data.dns || []).filter(item => item.status === 'failed')
+      ElMessage({message: failed.length ? `有 ${failed.length} 条 DNS 记录写入失败，请看下方记录手动添加` : 'DNS 记录已写入，几分钟后点「验证」', type: failed.length ? 'warning' : 'success', plain: true})
+    }
+    await loadSendDomains()
+  } catch (e) {} finally {
+    sendLoading.value = false
+  }
+}
+
+async function verifySendDomain(row) {
+  sendLoading.value = true
+  try {
+    const data = await resendDomainVerify(row.id)
+    sendRecords.name = data.name
+    sendRecords.records = data.records || []
+    ElMessage({message: `${data.name}：${sendStatusText(data.status)}`, type: data.status === 'verified' ? 'success' : 'info', plain: true})
+    await loadSendDomains()
+  } catch (e) {} finally {
+    sendLoading.value = false
+  }
+}
+
+async function showSendRecords(row) {
+  sendLoading.value = true
+  try {
+    const data = await resendDomainGet(row.id)
+    sendRecords.name = data.name
+    sendRecords.records = data.records || []
+  } catch (e) {} finally {
+    sendLoading.value = false
+  }
+}
+
+async function applySendDns(row) {
+  sendLoading.value = true
+  try {
+    const data = await resendDomainApplyDns(row.id)
+    const failed = (data.dns || []).filter(item => item.status === 'failed')
+    ElMessage({message: failed.length ? `${failed.length} 条写入失败：${failed[0].message || ''}` : 'DNS 记录已写入', type: failed.length ? 'warning' : 'success', plain: true})
+  } catch (e) {} finally {
+    sendLoading.value = false
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -2115,4 +2256,9 @@ form .el-button {
 <style>
 .el-popper.is-dark {
 }
+
+.send-domain .sd-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.send-domain .sd-hint { color: var(--el-text-color-secondary); font-size: 12px; margin: 0 0 10px; }
+.send-domain .sd-records { margin-top: 14px; }
+.send-domain .sd-title { font-weight: 600; margin-bottom: 6px; }
 </style>
