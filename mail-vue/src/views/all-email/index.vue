@@ -78,7 +78,7 @@
         </el-table-column>
         <el-table-column label="验证码" width="120">
           <template #default="{row}">
-            <span v-if="row.code" class="ae-code" title="点击复制" @click.stop="copyCode(row.code)">{{ row.code }}</span>
+            <span v-if="codeOf(row)" class="ae-code" title="点击复制" @click.stop="copyCode(codeOf(row))">{{ codeOf(row) }}</span>
             <span v-else class="ae-muted">—</span>
           </template>
         </el-table-column>
@@ -210,7 +210,7 @@ async function load(reset = false) {
   try {
     const cursor = reset || list.value.length === 0 ? 0 : list.value[list.value.length - 1].emailId
     const data = await allEmailList(buildQuery(cursor))
-    const rows = data.list || []
+    const rows = (data.list || []).map(withCode)
     list.value = reset ? rows : [...list.value, ...rows]
     total.value = data.total || 0
     hasMore.value = rows.length === PAGE_SIZE
@@ -297,6 +297,23 @@ function closedClear() {
   clearTime.value = null
 }
 
+// 没有 AI 识别时，从标题/正文里提取验证码
+function codeOf(row) {
+  return row.code || row._code || ''
+}
+
+function withCode(row) {
+  if (row.code) return row
+  const subject = String(row.subject || '')
+  let m = subject.match(/(?:^|\D)(\d{4,8})(?=\D|$)/)
+  if (!m || !/code|验证码|驗證碼|認証|verification|otp/i.test(subject)) m = null
+  if (!m) {
+    const text = String(row.text || '').slice(0, 4000)
+    m = text.match(/(?:code|验证码|驗證碼|verification code)[^0-9]{0,30}(\d{4,8})(?!\d)/i)
+  }
+  return {...row, _code: m ? m[1] : ''}
+}
+
 async function copyCode(code) {
   try {
     await navigator.clipboard.writeText(String(code))
@@ -332,7 +349,7 @@ async function pollLatest() {
       const rows = await allEmailLatest(latestId)
       if (Array.isArray(rows) && rows.length) {
         const existing = new Set(list.value.map(row => row.emailId))
-        const fresh = rows.filter(row => !existing.has(row.emailId)).sort((a, b) => b.emailId - a.emailId)
+        const fresh = rows.filter(row => !existing.has(row.emailId)).map(withCode).sort((a, b) => b.emailId - a.emailId)
         list.value = [...fresh, ...list.value]
         total.value += fresh.length
       }
@@ -383,7 +400,7 @@ async function pollLatest() {
 }
 
 .ae-type {
-  width: 96px;
+  width: 112px;
 }
 
 .ae-select {
