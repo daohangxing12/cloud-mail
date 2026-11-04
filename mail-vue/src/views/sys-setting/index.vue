@@ -5,451 +5,138 @@
     </div>
     <el-scrollbar class="scroll" v-if="!firstLoading">
       <div class="scroll-body">
-        <div class="card-grid">
-          <!-- Website Settings Card -->
-          <div class="settings-card">
-            <div class="card-title">{{ $t('websiteSetting') }}</div>
-            <div class="card-content">
-              <div class="setting-item">
-                <div><span>{{ $t('websiteReg') }}</span></div>
-                <div>
-                  <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1"
-                             v-model="setting.register"/>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ $t('loginDomain') }}</span></div>
-                <div>
-                  <el-switch @change="change" :before-change="beforeChange" :active-value="1" :inactive-value="0"
-                             v-model="setting.loginDomain"/>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ $t('regKey') }}</span></div>
-                <div>
-                  <el-select
-                      @change="change"
-                      :style="`width: ${ locale === 'en' ?  100 : 80 }px;`"
-                      v-model="setting.regKey"
-                      placeholder="Select"
-                  >
-                    <el-option
-                        v-for="item in regKeyOptions"
-                        :key="item.value"
-                        :label="item.label"
-                        :value="item.value"
-                    />
-                  </el-select>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ $t('addAccount') }}</span></div>
-                <div>
-                  <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1"
-                             v-model="setting.addEmail"/>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div>
-                  <span>{{ $t('multipleEmail') }}</span>
-                  <el-tooltip effect="dark" :content="$t('multipleEmailDesc')">
-                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
-                  </el-tooltip>
-                </div>
-                <div>
-                  <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1"
-                             v-model="setting.manyEmail"/>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div>
-                  <span>{{ $t('emailPrefix') }}</span>
-                </div>
-                <div class="forward">
-                  <el-button class="opt-button" size="small" type="primary" @click="openEmailPrefix">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                </div>
-              </div>
+        <div class="ss-wrap">
+
+          <div class="ss-card">
+            <div class="ss-title">账号</div>
+            <div class="ss-row">
+              <div class="ss-text"><b>修改登录密码</b><span>登录用 admin + 这个密码</span></div>
+              <el-button size="small" type="primary" @click="pwdDialogShow = true">修改</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>网站名称</b><span>左上角和浏览器标签显示的名字：{{ setting.title }}</span></div>
+              <el-button size="small" @click="editTitleShow = true">修改</el-button>
             </div>
           </div>
 
-          <!-- Personalization Settings Card -->
-          <div class="settings-card">
-            <div class="card-title">{{ $t('customization') }}</div>
-            <div class="card-content">
-              <div class="setting-item">
-                <div class="title-item"><span>{{ $t('websiteTitle') }}</span></div>
-                <div class="email-title">
-                  <span>{{ setting.title }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="editTitleShow = true">
-                    <Icon icon="lsicon:edit-outline" width="16" height="16"/>
-                  </el-button>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div class="title-item"><span>{{ $t('loginBoxOpacity') }}</span></div>
-                <div>
-                  <el-input-number size="small" v-model="loginOpacity" @change="opacityChange" :precision="2"
-                                   :step="0.01" :max="1" :min="0"/>
-                </div>
-              </div>
-              <div class="setting-item personalized">
-                <div><span>{{ $t('loginBackground') }}</span></div>
-                <div>
-                  <el-image
-                      class="background"
-                      :src="cvtR2Url(setting.background)"
-                      :preview-src-list="[cvtR2Url(setting.background)]"
-                      show-progress
-                      fit="cover"
-                  >
-                    <template #error>
-                      <div class="error-image">
-                        <Icon icon="ph:image" width="24" height="24"/>
-                      </div>
-                    </template>
-                  </el-image>
-                  <div class="background-btn">
-                    <el-button class="opt-button" size="small" type="primary" @click="openSetBackground">
-                      <Icon icon="lsicon:edit-outline" width="16" height="16"/>
-                    </el-button>
-                    <el-button class="opt-button" size="small" type="primary" @click="delBackground">
-                      <Icon icon="material-symbols:delete-outline-rounded" width="16" height="16"/>
-                    </el-button>
-                  </div>
-                </div>
-              </div>
+          <div class="ss-card">
+            <div class="ss-title">收信</div>
+            <div class="ss-row">
+              <div class="ss-text"><b>接收邮件</b><span>关掉后所有域名都收不到信</span></div>
+              <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1" v-model="setting.receive"/>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>收信域名</b><span>添加新域名，一键配置 Cloudflare 收信</span></div>
+              <el-button size="small" type="primary" @click="openMailDomain">管理</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>收件箱规则</b><span>哪些邮件进收件箱，其余进垃圾邮箱（只管 TikTok 业务域名）</span></div>
+              <el-button size="small" type="primary" @click="openInboxRules">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>垃圾邮件黑名单</b><span>这些发件人 / 主题 / 内容直接进垃圾邮箱</span></div>
+              <el-button size="small" @click="openBlackListForm">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>自动清理旧邮件</b><span>{{ cleanSummary }}</span></div>
+              <el-button size="small" @click="openInboxRules">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>收件箱自动刷新</b><span>多久自动检查一次新邮件</span></div>
+              <el-select @change="change" style="width: 90px" v-model="setting.autoRefresh">
+                <el-option v-for="item in authRefreshOptions" :key="item.value" :label="item.label" :value="item.value"/>
+              </el-select>
             </div>
           </div>
 
-          <!-- Email Sending Settings Card -->
-          <div class="settings-card">
-            <div class="card-title">{{ $t('emailSetting') }}</div>
-            <div class="card-content">
-              <div class="setting-item">
-                <div><span>{{ $t('receiveEmail') }}</span></div>
-                <div>
-                  <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1"
-                             v-model="setting.receive"/>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div>
-                  <span>{{ $t('autoRefresh') }}</span>
-                  <el-tooltip effect="dark" :content="$t('autoRefreshDesc')">
-                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
-                  </el-tooltip>
-                </div>
-                <div>
-                  <el-select
-                      @change="change"
-                      :style="`width: ${ locale === 'en' ? 100 : 80 }px;`"
-                      v-model="setting.autoRefresh"
-                      placeholder="Select"
-                  >
-                    <el-option
-                        v-for="item in authRefreshOptions"
-                        :key="item.value"
-                        :label="item.label"
-                        :value="item.value"
-                    />
-                  </el-select>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ $t('sendEmail') }}</span></div>
-                <div>
-                  <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1"
-                             v-model="setting.send"/>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div>
-                  <span>{{ $t('noRecipientTitle') }}</span>
-                  <el-tooltip effect="dark" :content="$t('noRecipientDesc')">
-                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
-                  </el-tooltip>
-                </div>
-                <div>
-                  <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1"
-                             v-model="setting.noRecipient"/>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ setting.hasCfEmail ? $t('cloudflareEmailSending') : $t('resendToken') }}</span></div>
-                <div v-if="setting.hasCfEmail">
-                  <span>{{ $t('enabled') }}</span>
-                </div>
-                <div v-else>
-                  <el-button class="opt-button" style="margin-top: 0" @click="openResendList" size="small"
-                             type="primary">
-                    <Icon icon="ic:round-list" width="18" height="18"/>
-                  </el-button>
-                  <el-button class="opt-button" style="margin-top: 0" @click="openResendForm" size="small"
-                             type="primary">
-                    <Icon icon="material-symbols:add-rounded" width="16" height="16"/>
-                  </el-button>
-                  <el-button class="opt-button" style="margin-top: 0" @click="openSendDomain" size="small"
-                             type="primary">发信域名</el-button>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>收件箱规则</span></div>
-                <div>
-                  <el-button class="opt-button" style="margin-top: 0" @click="openInboxRules" size="small" type="primary">设置</el-button>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>收信域名</span></div>
-                <div>
-                  <el-button class="opt-button" style="margin-top: 0" @click="openMailDomain" size="small" type="primary">管理</el-button>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ $t('blackList') }}</span></div>
-                <div>
-                  <el-button class="opt-button" style="margin-top: 0" @click="openBlackListForm" size="small"
-                             type="primary">
-                    <Icon icon="fluent:settings-48-regular" width="16" height="16"/>
-                  </el-button>
-                </div>
-              </div>
+          <div class="ss-card">
+            <div class="ss-title">发信</div>
+            <div class="ss-row">
+              <div class="ss-text"><b>允许发信</b><span>关掉后网站里不能写信发送</span></div>
+              <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1" v-model="setting.send"/>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>发信设置</b><span>Resend 密钥、发信域名、可以用来发信的地址</span></div>
+              <el-button size="small" type="primary" @click="openSendDomain">设置</el-button>
             </div>
           </div>
 
-          <!-- Object Storage Card -->
-          <div class="settings-card">
-            <div class="card-title">{{ $t('oss') }}</div>
-            <div class="card-content">
-              <div class="r2domain-item">
-                <div>
-                  <span>{{ $t('osDomain') }}</span>
-                  <el-tooltip effect="dark" :content="$t('ossDomainDesc')">
-                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
-                  </el-tooltip>
-                </div>
-                <div class="r2domain">
-                  <span>{{ setting.r2Domain || '' }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="r2DomainShow = true">
-                    <Icon icon="lsicon:edit-outline" width="16" height="16"/>
-                  </el-button>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div>
-                  <span>{{ $t('s3Configuration') }}</span>
-                </div>
-                <div class="r2domain">
-                  <el-button class="opt-button" size="small" type="primary" @click="addS3Show = true">
-                    <Icon icon="fluent:settings-48-regular" width="16" height="16"/>
-                  </el-button>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div>
-                  <span>{{ $t('storageType') }}</span>
-                </div>
-                <div class="r2domain">
-                  <div class="storage-type">
-                    <el-tag>{{ setting.storageType }}</el-tag>
-                  </div>
-                </div>
-              </div>
+          <div class="ss-card">
+            <div class="ss-title">通知 / 转发</div>
+            <div class="ss-row">
+              <div class="ss-text"><b>推送到 Telegram</b><span>{{ setting.tgBotStatus === 0 ? '已开启' : '未开启' }}：新邮件发到 TG 机器人</span></div>
+              <el-button size="small" @click="openTgSetting">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>转发到其他邮箱</b><span>{{ setting.forwardStatus === 0 ? '已开启' : '未开启' }}：新邮件再转发一份到别的邮箱</span></div>
+              <el-button size="small" @click="openThirdEmailSetting">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>推送 / 转发范围</b><span>{{ setting.ruleType === 0 ? '全部邮箱' : '只推送指定邮箱' }}</span></div>
+              <el-button size="small" @click="openForwardRules">设置</el-button>
             </div>
           </div>
 
-          <div class="settings-card">
-            <div class="card-title">{{ $t('emailPush') }}</div>
-            <div class="card-content">
-              <div class="setting-item">
-                <div><span>{{ $t('tgBot') }}</span></div>
-                <div class="forward">
-                  <span>{{ setting.tgBotStatus === 0 ? $t('enabled') : $t('disabled') }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="openTgSetting">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                </div>
+          <el-collapse class="ss-adv">
+            <el-collapse-item title="高级设置（平时不用动）" name="adv">
+              <div class="ss-row">
+                <div class="ss-text"><b>开放注册</b><span>允许陌生人在登录页自己注册账号（自用建议关）</span></div>
+                <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1" v-model="setting.register"/>
               </div>
-              <div class="setting-item">
-                <div><span>{{ $t('otherEmail') }}</span></div>
-                <div class="forward">
-                  <span>{{ setting.forwardStatus === 0 ? $t('enabled') : $t('disabled') }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="openThirdEmailSetting">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                </div>
+              <div class="ss-row">
+                <div class="ss-text"><b>注册码</b><span>注册时是否要填邀请码</span></div>
+                <el-select @change="change" style="width: 90px" v-model="setting.regKey">
+                  <el-option v-for="item in regKeyOptions" :key="item.value" :label="item.label" :value="item.value"/>
+                </el-select>
               </div>
-              <div class="setting-item">
-                <div><span>{{ $t('forwardingRules') }}</span></div>
-                <div class="forward">
-                  <span>{{ setting.ruleType === 0 ? $t('forwardAll') : $t('rules') }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="openForwardRules">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                </div>
+              <div class="ss-row">
+                <div class="ss-text"><b>普通用户可添加邮箱</b><span>非管理员能否自己新建邮箱</span></div>
+                <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1" v-model="setting.addEmail"/>
               </div>
-            </div>
-          </div>
-
-          <!-- Turnstile Verification Card -->
-          <div class="settings-card">
-            <div class="card-title">{{ $t('turnstileSetting') }}</div>
-            <div class="card-content">
-              <div class="setting-item">
-                <div><span>{{ $t('signUpVerification') }}</span></div>
+              <div class="ss-row">
+                <div class="ss-text"><b>一个账号多个邮箱</b><span>普通用户能否拥有多个邮箱</span></div>
+                <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1" v-model="setting.manyEmail"/>
+              </div>
+              <div class="ss-row">
+                <div class="ss-text"><b>邮箱名长度限制</b><span>新建邮箱时用户名的规则</span></div>
+                <el-button size="small" @click="openEmailPrefix">设置</el-button>
+              </div>
+              <div class="ss-row">
+                <div class="ss-text"><b>无收件人也接收</b><span>发到不存在的邮箱也收下（批量接码需要开着）</span></div>
+                <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1" v-model="setting.noRecipient"/>
+              </div>
+              <div class="ss-row">
+                <div class="ss-text"><b>AI 识别验证码</b><span>用 Cloudflare AI 从邮件里认验证码（一般不用）</span></div>
+                <el-switch @change="changeField('aiCode', $event)" :before-change="beforeChange" :active-value="0" :inactive-value="1" v-model="setting.aiCode"/>
+              </div>
+              <div class="ss-row">
+                <div class="ss-text"><b>登录页背景</b><span>换一张登录页背景图</span></div>
                 <div>
-                  <el-button class="opt-button" size="small" type="primary" @click="openRegVerifyCount">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                  <el-select
-                      @change="change"
-                      :style="`width: ${ locale === 'en' ? 100 : 80 }px;`"
-                      v-model="setting.registerVerify"
-                      placeholder="Select"
-                      class="bot-verify-select"
-                  >
-                    <el-option key="1" :value="0" :label="$t('enable')"/>
-                    <el-option key="1" :value="1" :label="$t('disable')"/>
-                    <el-option key="1" :value="2" :label="$t('rulesVerify')"/>
-                  </el-select>
+                  <el-button size="small" @click="openSetBackground">更换</el-button>
+                  <el-button size="small" @click="delBackground">删除</el-button>
                 </div>
               </div>
-              <div class="setting-item">
-                <div><span>{{ $t('addEmailVerification') }}</span></div>
+              <div class="ss-row">
+                <div class="ss-text"><b>登录框透明度</b><span>0 = 全透明，1 = 不透明</span></div>
+                <el-input-number size="small" v-model="loginOpacity" @change="opacityChange" :precision="2" :step="0.05" :max="1" :min="0"/>
+              </div>
+              <div class="ss-row">
+                <div class="ss-text"><b>附件存储</b><span>当前：{{ setting.storageType }}</span></div>
                 <div>
-                  <el-button class="opt-button" size="small" type="primary" @click="openAddVerifyCount">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                  <el-select
-                      @change="change"
-                      :style="`width: ${ locale === 'en' ? 100 : 80 }px;`"
-                      v-model="setting.addEmailVerify"
-                      placeholder="Select"
-                      class="bot-verify-select"
-                  >
-                    <el-option key="1" :value="0" :label="$t('enable')"/>
-                    <el-option key="1" :value="1" :label="$t('disable')"/>
-                    <el-option key="1" :value="2" :label="$t('rulesVerify')"/>
-                  </el-select>
+                  <el-button size="small" @click="r2DomainShow = true">访问域名</el-button>
+                  <el-button size="small" @click="addS3Show = true">S3</el-button>
                 </div>
               </div>
-              <div class="setting-item">
-                <div><span>Site Key</span></div>
-                <div class="bot-verify">
-                  <span>{{ setting.siteKey }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="turnstileShow = true">
-                    <Icon icon="lsicon:edit-outline" width="16" height="16"/>
-                  </el-button>
-                </div>
+              <div class="ss-row">
+                <div class="ss-text"><b>人机验证</b><span>注册 / 添加邮箱时的 Cloudflare Turnstile 验证</span></div>
+                <el-button size="small" @click="turnstileShow = true">设置</el-button>
               </div>
-              <div class="setting-item">
-                <div><span>Secret Key</span></div>
-                <div class="bot-verify">
-                  <span> {{ setting.secretKey }} </span>
-                  <el-button class="opt-button" size="small" type="primary" @click="turnstileShow = true">
-                    <Icon icon="lsicon:edit-outline" width="16" height="16"/>
-                  </el-button>
-                </div>
+              <div class="ss-row">
+                <div class="ss-text"><b>登录后弹窗公告</b><span>{{ setting.notice === 0 ? '已开启' : '未开启' }}</span></div>
+                <el-button size="small" @click="openNoticePopupSetting">设置</el-button>
               </div>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="card-title">{{ $t('noticeTitle') }}</div>
-            <div class="card-content">
-              <div class="setting-item">
-                <div><span>{{ $t('noticePopup') }}</span></div>
-                <div class="forward">
-                  <span>{{ setting.notice === 0 ? $t('enabled') : $t('disabled') }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="openNoticePopupSetting">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ $t('popUp') }}</span></div>
-                <div class="forward">
-                  <el-button class="opt-button" size="small" type="primary" @click="openNoticePopup">
-                    <Icon icon="mynaui:click-solid" width="18" height="18"/>
-                  </el-button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="card-title">Workers AI</div>
-            <div class="card-content">
-              <div class="setting-item">
-                <div><span>{{ $t('codeRecognition') }}</span></div>
-                <div>
-                  <el-switch @change="changeField('aiCode', $event)" :before-change="beforeChange" :active-value="0" :inactive-value="1"
-                             v-model="setting.aiCode"/>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ $t('codeRecognitionRules') }}</span></div>
-                <div class="forward">
-                  <el-button class="opt-button" size="small" type="primary" @click="openAiCodeFilter">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-card about">
-            <div class="card-title">{{ $t('about') }}</div>
-            <div class="card-content">
-              <div class="concerning-item">
-                <span>{{ $t('version') }} :</span>
-                <el-badge is-dot :hidden="!hasUpdate">
-                  <el-button @click="jump('https://github.com/maillab/cloud-mail/releases')">
-                    {{ currentVersion }}
-                    <template #icon>
-                      <Icon icon="qlementine-icons:version-control-16" style="font-size: 20px" color="#1890FF"/>
-                    </template>
-                  </el-button>
-                </el-badge>
-              </div>
-              <div class="concerning-item">
-                <span>{{ $t('community') }} : </span>
-                <div class="community">
-                  <el-button @click="jump('https://github.com/maillab/cloud-mail')">
-                    Github
-                    <template #icon>
-                      <Icon icon="codicon:github-inverted" width="22" height="22"/>
-                    </template>
-                  </el-button>
-                  <el-button @click="jump('https://t.me/cloud_mail_tg')">
-                    Telegram
-                    <template #icon>
-                      <Icon icon="logos:telegram" width="30" height="30"/>
-                    </template>
-                  </el-button>
-                </div>
-              </div>
-              <div class="concerning-item">
-                <span>{{ $t('support') }} : </span>
-                <el-button @click="jump('https://doc.skymail.ink/support.html')">
-                  {{ t('supportDesc') }}
-                  <template #icon>
-                    <Icon color="#79D6B5" icon="simple-icons:buymeacoffee" width="20" height="20"/>
-                  </template>
-                </el-button>
-              </div>
-              <div class="concerning-item">
-                <span>{{ $t('help') }} : </span>
-                <el-button @click="jump('https://doc.skymail.ink')">
-                  {{ t('document') }}
-                  <template #icon>
-                    <Icon color="#79D6B5" icon="fluent-color:document-32" width="18" height="18"/>
-                  </template>
-                </el-button>
-              </div>
-            </div>
-          </div>
+            </el-collapse-item>
+          </el-collapse>
         </div>
       </div>
 
@@ -640,6 +327,14 @@
           </div>
         </template>
       </el-dialog>
+      <el-dialog v-model="pwdDialogShow" title="修改登录密码" width="340">
+        <form>
+          <el-input type="password" placeholder="新密码（至少 6 位）" v-model="pwdForm.password" autocomplete="new-password" style="margin-bottom: 12px"/>
+          <el-input type="password" placeholder="再输一次" v-model="pwdForm.again" autocomplete="new-password" style="margin-bottom: 12px"/>
+          <el-button type="primary" style="width: 100%" :loading="pwdLoading" @click="savePwd">保存</el-button>
+        </form>
+      </el-dialog>
+
       <el-dialog v-model="inboxRulesShow" title="收件箱规则" width="720">
         <div class="send-domain" v-loading="inboxRulesLoading">
           <div class="sd-row">
@@ -660,11 +355,21 @@
               <el-input v-model="inboxRules.fromText" type="textarea" :rows="2"/>
             </el-form-item>
             <el-checkbox v-model="inboxRules.replyToInbox">别人回复我的邮件进收件箱</el-checkbox>
+            <div class="ss-title" style="margin-top: 14px">自动清理旧邮件（所有域名，星标邮件永远不删）</div>
+            <div class="sd-row" style="gap: 10px; flex-wrap: wrap">
+              <span>垃圾邮箱超过</span>
+              <el-input-number v-model="inboxRules.cleanSpamDays" :min="0" :max="3650" size="small" style="width: 110px"/>
+              <span>天自动删除；收件箱超过</span>
+              <el-input-number v-model="inboxRules.cleanInboxDays" :min="0" :max="3650" size="small" style="width: 110px"/>
+              <span>天自动删除（填 0 = 不删）</span>
+            </div>
+            <p class="sd-hint">每 30 分钟自动执行一次。删除后不能恢复。</p>
           </el-form>
         </div>
         <template #footer>
           <el-button @click="resetInboxRules">恢复默认</el-button>
           <el-button :loading="inboxApplyLoading" @click="applyInboxRules">整理最近 30 天邮件</el-button>
+          <el-button :loading="inboxCleanLoading" @click="cleanNow">现在就清理</el-button>
           <el-button type="primary" :loading="inboxRulesLoading" @click="saveInboxRules">保存</el-button>
         </template>
       </el-dialog>
@@ -941,8 +646,9 @@
 <script setup>
 import {computed, defineOptions, nextTick, reactive, ref} from "vue";
 import {deleteBackground, setBackground, setBlackList, settingQuery, settingSet} from "@/request/setting.js";
-import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey, sendSenderList, sendSenderSave, mailDomainList, mailDomainAdd, mailDomainRemove, inboxRulesGet, inboxRulesSave, inboxRulesApply, mailDomainSaveToken} from "@/request/resend-domain.js";
+import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey, sendSenderList, sendSenderSave, mailDomainList, mailDomainAdd, mailDomainRemove, inboxRulesGet, inboxRulesSave, inboxRulesApply, mailDomainSaveToken, inboxRulesClean} from "@/request/resend-domain.js";
 import {useSettingStore} from "@/store/setting.js";
+import {resetPassword} from "@/request/my.js";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
 import {useAccountStore} from "@/store/account.js";
@@ -1790,16 +1496,38 @@ async function applySendDns(row) {
     sendLoading.value = false
   }
 }
+// ===== 修改登录密码 =====
+const pwdDialogShow = ref(false)
+const pwdLoading = ref(false)
+const pwdForm = reactive({password: '', again: ''})
+
+async function savePwd() {
+  if (pwdForm.password.length < 6) return ElMessage({message: '密码至少 6 位', type: 'error', plain: true})
+  if (pwdForm.password !== pwdForm.again) return ElMessage({message: '两次输入不一样', type: 'error', plain: true})
+  pwdLoading.value = true
+  try {
+    await resetPassword(pwdForm.password)
+    pwdForm.password = ''
+    pwdForm.again = ''
+    pwdDialogShow.value = false
+    ElMessage({message: '密码已修改，下次用新密码登录', type: 'success', plain: true})
+  } catch (e) {} finally {
+    pwdLoading.value = false
+  }
+}
+
 // ===== 收件箱规则 =====
 const inboxRulesShow = ref(false)
 const inboxRulesLoading = ref(false)
 const inboxApplyLoading = ref(false)
-const inboxRules = reactive({enabled: true, domainsText: '', subjectText: '', bodyText: '', fromText: '', replyToInbox: true})
+const inboxRules = reactive({enabled: true, cleanSpamDays: 15, cleanInboxDays: 0, domainsText: '', subjectText: '', bodyText: '', fromText: '', replyToInbox: true})
 let inboxDefaults = null
 
 function fillInboxRules(r) {
   inboxRules.enabled = r.enabled !== false
   inboxRules.domainsText = (r.domains || []).join('\n')
+  inboxRules.cleanSpamDays = Number(r.cleanSpamDays || 0)
+  inboxRules.cleanInboxDays = Number(r.cleanInboxDays || 0)
   inboxRules.subjectText = (r.subject || []).join('\n')
   inboxRules.bodyText = (r.body || []).join('\n')
   inboxRules.fromText = (r.from || []).join('\n')
@@ -1826,11 +1554,34 @@ async function saveInboxRules() {
   inboxRulesLoading.value = true
   try {
     const split = (t) => t.split('\n').map(s => s.trim()).filter(Boolean)
-    const data = await inboxRulesSave({enabled: inboxRules.enabled, domains: split(inboxRules.domainsText), subject: split(inboxRules.subjectText), body: split(inboxRules.bodyText), from: split(inboxRules.fromText), replyToInbox: inboxRules.replyToInbox})
+    const data = await inboxRulesSave({enabled: inboxRules.enabled, domains: split(inboxRules.domainsText), cleanSpamDays: inboxRules.cleanSpamDays, cleanInboxDays: inboxRules.cleanInboxDays, subject: split(inboxRules.subjectText), body: split(inboxRules.bodyText), from: split(inboxRules.fromText), replyToInbox: inboxRules.replyToInbox})
     fillInboxRules(data.rules)
     ElMessage({message: '已保存，新邮件立即按此规则分类', type: 'success', plain: true})
   } catch (e) {} finally {
     inboxRulesLoading.value = false
+  }
+}
+
+const inboxCleanLoading = ref(false)
+const cleanSummary = computed(() => {
+  const a = inboxRules.cleanSpamDays ? `垃圾邮箱 ${inboxRules.cleanSpamDays} 天后自动删除` : '垃圾邮箱不自动删除'
+  const b = inboxRules.cleanInboxDays ? `，收件箱 ${inboxRules.cleanInboxDays} 天后自动删除` : ''
+  return a + b
+})
+inboxRulesGet().then(data => { inboxDefaults = data.defaults; fillInboxRules(data.rules) }).catch(() => {})
+
+async function cleanNow() {
+  try {
+    await ElMessageBox.confirm('会按上面的天数立刻彻底删除旧邮件（先点保存才按新天数），删了不能恢复。继续？', '现在就清理', {confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning'})
+  } catch (e) {
+    return
+  }
+  inboxCleanLoading.value = true
+  try {
+    const data = await inboxRulesClean()
+    ElMessage({message: `已删除垃圾邮箱 ${data.spam} 封、收件箱 ${data.inbox} 封`, type: 'success', plain: true})
+  } catch (e) {} finally {
+    inboxCleanLoading.value = false
   }
 }
 
@@ -1960,6 +1711,45 @@ function removeMailDomain(row) {
   }
 }
 
+.ss-wrap {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ss-card, .ss-adv {
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  padding: 6px 18px;
+}
+.ss-adv { padding: 0 18px; }
+.ss-adv :deep(.el-collapse-item__header) { font-size: 15px; font-weight: 600; border: 0; background: transparent; }
+.ss-adv :deep(.el-collapse-item__wrap) { border: 0; background: transparent; }
+.ss-adv:deep(.el-collapse), .ss-adv { border-top: 1px solid var(--el-border-color-lighter); border-bottom: 1px solid var(--el-border-color-lighter); }
+.ss-title {
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 0 6px;
+}
+.ss-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--el-border-color-extra-light);
+}
+.ss-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  b { font-weight: 500; font-size: 14px; }
+  span { font-size: 12px; color: var(--el-text-color-secondary); }
+}
 .card-grid {
 
   display: grid;

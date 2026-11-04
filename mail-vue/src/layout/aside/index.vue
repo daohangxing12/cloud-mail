@@ -8,8 +8,8 @@
       <el-menu
           :collapse="false"
           :default-openeds="['inbox-domain']"
-          text-color="#fff"
-          active-text-color="#fff"
+          text-color="var(--lq-muted)"
+          active-text-color="var(--lq-text)"
           style="margin-top: 10px"
       >
         <el-menu-item
@@ -310,8 +310,8 @@ function cleanDomain(domain) {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  color: #ffffff;
-  background: linear-gradient(135deg, #1890ff, #3a80dd);
+  color: var(--lq-on-primary);
+  background: var(--lq-primary);
   transition: all 0.3s ease;
   max-width: 240px;
   padding: 0 10px;
@@ -332,7 +332,8 @@ function cleanDomain(domain) {
 .manage-title {
   margin-top: 10px;
   padding-left: 20px;
-  color: #fff;
+  color: var(--lq-muted);
+  font-size: 12px;
 }
 
 .el-menu-item {
@@ -343,14 +344,15 @@ function cleanDomain(domain) {
 }
 
 .choose-item {
-  font-weight: bold;
-  background: rgba(255, 255, 255, 0.08) !important;
-  backdrop-filter: blur(4px);
+  font-weight: 600;
+  color: var(--lq-text) !important;
+  background: var(--lq-active) !important;
 }
 
 .choose-sub-menu :deep(.el-sub-menu__title) {
-  font-weight: bold;
-  background: rgba(255, 255, 255, 0.08) !important;
+  font-weight: 600;
+  color: var(--lq-text) !important;
+  background: var(--lq-active) !important;
 }
 
 .inbox-title {
@@ -369,7 +371,7 @@ function cleanDomain(domain) {
 }
 
 .domain-current:not(.choose-item) {
-  background: rgba(255, 255, 255, 0.045) !important;
+  background: transparent !important;
 }
 
 .domain-name {
@@ -383,21 +385,23 @@ function cleanDomain(domain) {
   height: 18px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #1890ff;
-  color: #fff;
+  background: transparent;
+  color: var(--lq-muted);
   font-size: 12px;
+  font-weight: 500;
   line-height: 18px;
   text-align: center;
 }
 
 .empty-domain {
-  color: rgba(255, 255, 255, 0.45) !important;
+  color: var(--lq-muted) !important;
 }
 
 @media (hover: hover) {
   .el-menu-item:hover,
   :deep(.el-sub-menu__title:hover) {
-    background: rgba(255, 255, 255, 0.08) !important;
+    background: var(--lq-hover) !important;
+    color: var(--lq-text) !important;
   }
 }
 
@@ -418,11 +422,11 @@ function cleanDomain(domain) {
   border-radius: 6px;
   height: 36px;
   padding: 10px !important;
-  color: #fff !important;
+  color: var(--lq-muted) !important;
 }
 
 :deep(.el-sub-menu__title .el-sub-menu__icon-arrow) {
-  color: #fff;
+  color: var(--lq-muted);
 }
 
 :deep(.el-menu) {
@@ -436,6 +440,6 @@ function cleanDomain(domain) {
 
 :deep(.el-divider__text) {
   background: var(--aside-backgound);
-  color: #FFFFFF;
+  color: var(--lq-muted);
 }
 </style>

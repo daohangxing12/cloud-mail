@@ -47,3 +47,7 @@ export function subAccountBatchCreate(form) {
 export function subAccountBatchToken(accountIds, mode) {
     return http.post('/subAccount/batchToken', {accountIds, mode})
 }
+
+export function subAccountNextSeq(domain, prefix) {
+    return http.post('/subAccount/nextSeq', {domain, prefix})
+}

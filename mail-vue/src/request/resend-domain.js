@@ -17,3 +17,5 @@ export const inboxRulesSave = (rules) => http.post('/inboxRules/save', {rules})
 export const inboxRulesApply = (days = 30) => http.post('/inboxRules/apply', {days})
 
 export const mailDomainSaveToken = (token) => http.post('/mailDomain/saveToken', {token})
+export const inboxRulesClean = () => http.post('/inboxRules/clean', {})
+export const inboxRulesCleanRemarks = () => http.post('/inboxRules/cleanRemarks', {})

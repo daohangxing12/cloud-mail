@@ -205,3 +205,26 @@ app.post('/subAccount/batchToken', async (c) => {
 	}
 	return json(c, { list, base });
 });
+
+// 前缀序号建号：查已有的「前缀+数字@域名」里最大的序号，返回下一个
+app.post('/subAccount/nextSeq', async (c) => {
+	const denied = await requireAdmin(c, 'user:add');
+	if (denied) return json(c, null, 403, '没有权限');
+	const p = await c.req.json().catch(() => ({}));
+	const domain = String(p.domain || '').replace(/^@/, '').trim().toLowerCase();
+	const prefix = String(p.prefix || '').trim().toLowerCase();
+	if (!domain) return json(c, null, 400, '缺少域名');
+	const { results } = await c.env.db.prepare(
+		`SELECT email FROM account WHERE lower(email) LIKE ? AND lower(email) LIKE ?`
+	).bind(`${prefix.replace(/[%_]/g, '')}%`, `%@${domain}`).all();
+	let max = 0, width = 0;
+	const re = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)@' + domain.replace(/\./g, '\\.') + '$', 'i');
+	for (const r of results || []) {
+		const m = re.exec(String(r.email));
+		if (m) {
+			const n = Number(m[1]);
+			if (n > max) { max = n; width = m[1].length; }
+		}
+	}
+	return json(c, { next: max + 1, width, existing: max });
+});

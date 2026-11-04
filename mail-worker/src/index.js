@@ -8,6 +8,7 @@ import oauthService from "./service/oauth-service";
 import analysisService from './service/analysis-service';
 import batchToolHtml from './batch-tool/tool-html';
 import { withExtraDomains } from './utils/extra-domains';
+import { cleanOldMail, cleanSyncRemarks } from './utils/mail-cleanup';
 export default {
 	 async fetch(req, env, ctx) {
 
@@ -41,6 +42,8 @@ export default {
 	async scheduled(c, env, ctx) {
 		env = await withExtraDomains(env);
 		if (c.cron === '*/30 * * * *') {
+			try { await cleanSyncRemarks(env); } catch (e) { console.error('清理备注失败', e); }
+			try { await cleanOldMail(env); } catch (e) { console.error('自动清理邮件失败', e); }
 			await analysisService.refreshEchartsCache({ env })
 			return;
 		}

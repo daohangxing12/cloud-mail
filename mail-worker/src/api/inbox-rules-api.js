@@ -2,6 +2,7 @@ import app from '../hono/hono';
 import settingService from '../service/setting-service';
 import { DEFAULT_INBOX_RULES, readInboxRules, saveInboxRules, isImportant, inScope } from '../utils/inbox-rules';
 import { checkBlock } from '../email/email';
+import { cleanOldMail, cleanSyncRemarks } from '../utils/mail-cleanup';
 
 const json = (c, data, code = 200, message = 'success') => c.json({ code, message, data });
 
@@ -65,3 +66,7 @@ app.post('/inboxRules/apply', guard(async (c, p) => {
 	await update(toInbox, 0);
 	return { days, scanned, movedToSpam: toSpam.length, movedToInbox: toInbox.length };
 }));
+
+app.post('/inboxRules/clean', guard(async (c) => await cleanOldMail(c.env, 5000)));
+
+app.post('/inboxRules/cleanRemarks', guard(async (c) => ({ changed: await cleanSyncRemarks(c.env, true) })));

@@ -24,12 +24,17 @@ export const DEFAULT_INBOX_RULES = {
 	body: ['Your 6-digit code is:', 'Your verification code is:', '你的验证码是', '您的验证码是', '你的驗證碼是'],
 	// 这些发件方永远进收件箱（含子域名，如 email.apple.com）
 	from: ['ntmcn.com', 'flyvg.com', 'flygw.com', 'paypal.com', 'apple.com', 'icloud.com'],
-	replyToInbox: true
+	replyToInbox: true,
+	// 自动清理：超过 N 天的邮件彻底删除（0 = 不清理）。加了星标的永远不删
+	cleanSpamDays: 15,
+	cleanInboxDays: 0
 };
 
 let cache = { at: 0, rules: null };
 
 const cleanList = (v) => [...new Set((Array.isArray(v) ? v : String(v || '').split(/[\n,]/)).map(s => String(s).trim()).filter(Boolean))];
+
+const days = (v) => Math.min(Math.max(Math.floor(Number(v) || 0), 0), 3650);
 
 export function normalizeRules(r) {
 	r = r || {};
@@ -39,7 +44,9 @@ export function normalizeRules(r) {
 		subject: cleanList(r.subject ?? DEFAULT_INBOX_RULES.subject),
 		body: cleanList(r.body ?? DEFAULT_INBOX_RULES.body),
 		from: cleanList(r.from ?? DEFAULT_INBOX_RULES.from).map(s => s.toLowerCase()),
-		replyToInbox: r.replyToInbox !== false
+		replyToInbox: r.replyToInbox !== false,
+		cleanSpamDays: days(r.cleanSpamDays ?? DEFAULT_INBOX_RULES.cleanSpamDays),
+		cleanInboxDays: days(r.cleanInboxDays ?? DEFAULT_INBOX_RULES.cleanInboxDays)
 	};
 }
 

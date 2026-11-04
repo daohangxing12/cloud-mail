@@ -176,11 +176,21 @@
             <el-option v-for="item in domainOptions" :key="item" :label="item" :value="item"/>
           </el-select>
           <el-radio-group v-model="batchForm.mode">
+            <el-radio-button value="seq">前缀+序号</el-radio-button>
             <el-radio-button value="random">随机生成</el-radio-button>
             <el-radio-button value="names">指定用户名</el-radio-button>
           </el-radio-group>
         </div>
-        <div v-if="batchForm.mode === 'random'" class="sa-batch-row">
+        <template v-if="batchForm.mode === 'seq'">
+          <div class="sa-batch-row">
+            <div class="sa-field"><label>前缀</label><el-input v-model.trim="batchForm.prefix" placeholder="如 us" style="width: 110px" @change="loadNextSeq"/></div>
+            <div class="sa-field"><label>建几个</label><el-input-number v-model="batchForm.count" :min="1" :max="2000"/></div>
+            <div class="sa-field"><label>从几号开始</label><el-input-number v-model="batchForm.start" :min="0" :max="99999999"/></div>
+            <div class="sa-field"><label>序号位数</label><el-input-number v-model="batchForm.width" :min="1" :max="8"/></div>
+          </div>
+          <p class="sa-tip">将创建：<b>{{ seqPreview }}</b>{{ seqHint }}</p>
+        </template>
+        <div v-else-if="batchForm.mode === 'random'" class="sa-batch-row">
           <div class="sa-field"><label>数量</label><el-input-number v-model="batchForm.count" :min="1" :max="2000"/></div>
           <div class="sa-field"><label>前缀（可空）</label><el-input v-model.trim="batchForm.prefix" placeholder="如 tk" style="width: 120px"/></div>
           <div class="sa-field"><label>随机位数</label><el-input-number v-model="batchForm.length" :min="4" :max="20"/></div>
@@ -235,6 +245,7 @@ import {useSettingStore} from '@/store/setting.js'
 import {
   subAccountAdd,
   subAccountBatchCreate,
+  subAccountNextSeq,
   subAccountBatchToken,
   subAccountDelete,
   subAccountGenToken,
@@ -404,7 +415,36 @@ const batchShow = ref(false)
 const batchLoading = ref(false)
 const batchProgress = ref('')
 const batchResult = ref([])
-const batchForm = reactive({suffix: '', mode: 'random', count: 20, prefix: '', length: 8, names: '', autoDownload: true})
+const batchForm = reactive({suffix: '', mode: 'seq', count: 10, prefix: '', length: 8, start: 1, width: 3, names: '', autoDownload: true})
+const seqHint = ref('')
+
+function seqNames() {
+  const out = []
+  for (let i = 0; i < Number(batchForm.count || 0); i++) {
+    out.push(`${batchForm.prefix}${String(Number(batchForm.start || 0) + i).padStart(Number(batchForm.width || 1), '0')}`)
+  }
+  return out
+}
+
+const seqPreview = computed(() => {
+  const names = seqNames()
+  if (!names.length) return '—'
+  const d = cleanDomain(batchForm.suffix)
+  return names.length === 1 ? `${names[0]}@${d}` : `${names[0]}@${d} ~ ${names[names.length - 1]}@${d}（共 ${names.length} 个）`
+})
+
+async function loadNextSeq() {
+  const domain = cleanDomain(batchForm.suffix)
+  if (!domain || batchForm.mode !== 'seq') return
+  try {
+    const data = await subAccountNextSeq(domain, batchForm.prefix)
+    batchForm.start = data.next
+    if (data.width) batchForm.width = data.width
+    seqHint.value = data.existing ? `（已有到 ${batchForm.prefix}${String(data.existing).padStart(data.width, '0')}，自动接着往后排）` : ''
+  } catch (e) {}
+}
+
+watch(() => [batchForm.suffix, batchForm.mode], loadNextSeq)
 
 watch(domainOptions, (list) => {
   if (!batchForm.suffix && list.length > 0) batchForm.suffix = list[0]
@@ -424,6 +464,7 @@ const batchSummary = computed(() => {
 
 function openBatchCreate() {
   batchShow.value = true
+  loadNextSeq()
 }
 
 function resetBatch() {
@@ -435,8 +476,12 @@ async function submitBatch() {
   const domain = cleanDomain(batchForm.suffix)
   if (!domain) return
   const jobs = []
-  if (batchForm.mode === 'names') {
-    const names = String(batchForm.names || '').split(/[\s,;，；]+/).filter(Boolean)
+  if (batchForm.mode === 'names' || batchForm.mode === 'seq') {
+    if (batchForm.mode === 'seq' && !batchForm.prefix) {
+      ElMessage({message: '请填写前缀', type: 'warning', plain: true})
+      return
+    }
+    const names = batchForm.mode === 'seq' ? seqNames() : String(batchForm.names || '').split(/[\s,;，；]+/).filter(Boolean)
     if (!names.length) {
       ElMessage({message: '请填写用户名', type: 'warning', plain: true})
       return
