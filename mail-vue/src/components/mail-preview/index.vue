@@ -34,21 +34,24 @@
         <div class="preview-container">
           <div class="email-title">{{ currentEmail.subject || '(' + t('noSubject') + ')' }}</div>
           <div class="email-meta">
-            <div class="meta-row">
-              <span class="meta-label">{{ t('from') }}</span>
-              <span class="meta-value">
-                <span class="sender-name">{{ currentEmail.name }}</span>
-                <span>&lt;{{ currentEmail.sendEmail }}&gt;</span>
-              </span>
-            </div>
-            <div class="meta-row">
-              <span class="meta-label">{{ t('recipient') }}</span>
-              <span class="meta-value">{{ formatReceive(currentEmail) }}</span>
-            </div>
-            <div class="meta-date">{{ formatDetailDate(currentEmail.createTime) }}</div>
+            <SenderAvatar class="lq-header-avatar" :email="currentEmail.sendEmail" :name="currentEmail.name" :size="40"/>
+            <div class="lq-envelope">
+              <div class="meta-row lq-sender-line">
+                <span class="meta-label">{{ t('from') }}</span>
+                <span class="meta-value">
+                  <span class="sender-name">{{ currentEmail.name }}</span>
+                  <span class="lq-addr">&lt;{{ currentEmail.sendEmail }}&gt;</span>
+                </span>
+                <span class="meta-date">{{ formatDetailDate(currentEmail.createTime) }}</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">{{ t('recipient') }}</span>
+                <span class="meta-value">{{ formatReceive(currentEmail) }}</span>
+              </div>
             <el-alert v-if="currentEmail.status === 3" :closable="false" :title="toMessage(currentEmail.message)" class="email-msg" type="error" show-icon />
             <el-alert v-if="currentEmail.status === 4" :closable="false" :title="t('complained')" class="email-msg" type="warning" show-icon />
             <el-alert v-if="currentEmail.status === 5" :closable="false" :title="t('delayed')" class="email-msg" type="warning" show-icon />
+            </div>
           </div>
           <div class="message-stage" :class="{ 'plain-stage': !currentEmail.content }">
             <ShadowHtml class="shadow-html" :html="formatImage(currentEmail.content)" v-if="currentEmail.content" />
@@ -87,7 +90,7 @@
     <div v-else class="empty-preview">
       <Icon icon="fluent:mail-read-20-regular" width="52" height="52" />
       <div class="empty-title">选择一封邮件查看详情</div>
-      <div class="empty-desc">左侧列表保留快速筛选，右侧会像 SmarterMail 一样展示完整邮件内容。</div>
+
     </div>
   </div>
 </template>
@@ -97,6 +100,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ShadowHtml from '@/components/shadow-html/index.vue'
+import SenderAvatar from '@/components/sender-avatar/index.vue'
 import { emailBlockSender, emailDelete, emailMoveFolder, emailRead } from '@/request/email.js'
 import { allEmailDelete } from '@/request/all-email.js'
 import { starAdd, starCancel } from '@/request/star.js'
@@ -300,12 +304,13 @@ function handleBlockSender() {
 }
 
 .preview-toolbar {
-  min-height: 42px;
-  padding: 7px 16px;
+  min-height: 58px;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
-  gap: 18px;
-  border-bottom: 1px solid var(--el-border-color);
+  gap: 16px;
+  border-bottom: 1px solid var(--lq-border);
+  color: var(--lq-text);
 
   .icon {
     cursor: pointer;
@@ -330,34 +335,57 @@ function handleBlockSender() {
 
 .preview-container {
   min-height: 100%;
-  padding: 20px 28px 38px;
+  padding: 0 0 38px;
 }
 
 .email-title {
-  font-size: 22px;
-  line-height: 1.3;
-  font-weight: 700;
-  margin-bottom: 14px;
+  font-size: 19px;
+  line-height: 1.5;
+  font-weight: 600;
+  padding: 18px 24px 0;
+  margin-bottom: 12px;
+  color: var(--lq-text);
 }
 
 .email-meta {
-  border-bottom: 1px solid var(--light-border-color);
-  padding-bottom: 12px;
-  margin-bottom: 16px;
-  color: var(--regular-text-color);
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--lq-border);
+  padding: 0 24px 16px;
+  margin-bottom: 0;
+  color: var(--lq-muted);
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.lq-header-avatar {
+  margin-right: 12px;
+}
+
+.lq-envelope {
+  flex: 1;
+  min-width: 0;
+}
+
+.lq-sender-line {
+  align-items: baseline;
+  .sender-name { color: var(--lq-text); font-weight: 500; }
+  .lq-addr { color: var(--lq-muted); }
+  .meta-date { margin: 0 0 0 auto; padding-left: 14px; white-space: nowrap; }
 }
 
 .meta-row {
   display: flex;
-  gap: 12px;
-  margin-bottom: 7px;
-  line-height: 1.45;
+  gap: 9px;
+  margin-bottom: 2px;
+  line-height: 22px;
 }
 
 .meta-label {
   flex: 0 0 auto;
-  font-weight: 700;
-  color: var(--el-text-color-primary);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--lq-muted);
 }
 
 .meta-value {
@@ -370,7 +398,8 @@ function handleBlockSender() {
 }
 
 .meta-date {
-  margin-top: 8px;
+  color: var(--lq-muted);
+  font-size: 12px;
 }
 
 .email-msg {
@@ -380,11 +409,11 @@ function handleBlockSender() {
 
 .message-stage {
   min-height: 620px;
-  padding: 30px;
+  padding: 28px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  background: color-mix(in srgb, var(--el-fill-color-light) 70%, transparent);
+  background: var(--lq-bg);
   overflow: auto;
 }
 
@@ -405,8 +434,7 @@ function handleBlockSender() {
 }
 
 .att {
-  margin-top: 24px;
-  margin-bottom: 24px;
+  margin: 24px;
   border: 1px solid var(--light-border-color);
   padding: 14px;
   border-radius: 8px;

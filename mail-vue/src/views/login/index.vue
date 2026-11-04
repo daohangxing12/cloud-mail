@@ -1,86 +1,43 @@
 <template>
-  <div id="login-box" :style=" background ? 'background: var(--el-bg-color)' : ''" v-loading="oauthLoading" element-loading-text="登录中...">
-    <div id="background-wrap" v-if="!settingStore.settings.background">
-      <div class="x1 cloud"></div>
-      <div class="x2 cloud"></div>
-      <div class="x3 cloud"></div>
-      <div class="x4 cloud"></div>
-      <div class="x5 cloud"></div>
-    </div>
-    <div v-else :style="background"></div>
-    <div class="form-wrapper">
-      <div class="container">
-        <span class="form-title">{{ settingStore.settings.title }}</span>
-        <span class="form-desc" v-if="show === 'login'">{{ $t('loginTitle') }}</span>
-        <span class="form-desc" v-else>{{ $t('regTitle') }}</span>
-        <div v-show="show === 'login'">
-          <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="form.email"
-                    type="text" :placeholder="$t('emailAccount')" autocomplete="off">
-            <template #append v-if="!hideLoginDomain">
-              <div @click.stop="openSelect">
-                <el-select
-                    v-if="show === 'login'"
-                    ref="mySelect"
-                    v-model="suffix"
-                    :placeholder="$t('select')"
-                    class="select"
-                >
-                  <el-option
-                      v-for="item in domainList"
-                      :key="item"
-                      :label="item"
-                      :value="item"
-                  />
-                </el-select>
-                <div style="color: var(--el-text-color-primary)">
-                  <span>{{ suffix }}</span>
-                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-                </div>
-              </div>
-            </template>
-          </el-input>
-          <el-input v-model="form.password" :placeholder="$t('password')" type="password" autocomplete="off">
-          </el-input>
-          <el-button class="btn" type="primary" @click="submit" :loading="loginLoading"
-          >{{ $t('loginBtn') }}
-          </el-button>
-          <el-button class="btn" v-if="settingStore.settings.linuxdoSwitch"  style="margin-top: 10px"  @click="linuxDoLogin">
+  <div class="lq-login-page" v-loading="oauthLoading" element-loading-text="登录中...">
+    <div class="lq-login-wrap">
+      <div class="lq-login-heading">
+        <Icon class="lq-login-symbol" icon="lucide:mail" width="38" height="38"/>
+        <h1>{{ settingStore.settings.title }}</h1>
+        <p>登录邮箱，轻松管理每一封邮件</p>
+      </div>
+      <div class="lq-login-card">
+        <template v-if="show === 'login'">
+          <h2>欢迎回来</h2>
+          <p>用 admin 和你的密码登录</p>
+          <label>账号</label>
+          <el-input v-model="form.email" type="text" placeholder="admin" autocomplete="username" @keyup.enter="submit"/>
+          <label>密码</label>
+          <el-input v-model="form.password" placeholder="密码" type="password" show-password autocomplete="current-password" @keyup.enter="submit"/>
+          <el-button class="lq-btn" type="primary" @click="submit" :loading="loginLoading">登录</el-button>
+          <el-button class="lq-btn" v-if="settingStore.settings.linuxdoSwitch" @click="linuxDoLogin">
             <el-avatar src="/image/linuxdo.webp" :size="18" style="margin-right: 10px" />LinuxDo
           </el-button>
-        </div>
-        <div v-show="show !== 'login'">
-          <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="registerForm.email" type="text" :placeholder="$t('emailAccount')"
-                    autocomplete="off">
+        </template>
+        <template v-else>
+          <h2>注册</h2>
+          <p>创建一个新邮箱</p>
+          <label>邮箱</label>
+          <el-input v-model="registerForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
             <template #append v-if="!hideLoginDomain">
-              <div @click.stop="openSelect">
-                <el-select
-                    v-if="show !== 'login'"
-                    ref="mySelect"
-                    v-model="suffix"
-                    :placeholder="$t('select')"
-                    class="select"
-                >
-                  <el-option
-                      v-for="item in domainList"
-                      :key="item"
-                      :label="item"
-                      :value="item"
-                  />
-                </el-select>
-                <div>
-                  <span>{{ suffix }}</span>
-                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
-                </div>
-              </div>
+              <el-select v-model="suffix" style="width: 140px">
+                <el-option v-for="item in domainList" :key="item" :label="item" :value="item"/>
+              </el-select>
             </template>
           </el-input>
+          <label>密码</label>
           <el-input v-model="registerForm.password" :placeholder="$t('password')" type="password" autocomplete="off"/>
-          <el-input v-model="registerForm.confirmPassword" :placeholder="$t('confirmPwd')" type="password"
-                    autocomplete="off"/>
-          <el-input v-if="settingStore.settings.regKey === 0" v-model="registerForm.code" :placeholder="$t('regKey')"
-                    type="text" autocomplete="off"/>
-          <el-input v-if="settingStore.settings.regKey === 2" v-model="registerForm.code"
-                    :placeholder="$t('regKeyOptional')" type="text" autocomplete="off"/>
+          <label>确认密码</label>
+          <el-input v-model="registerForm.confirmPassword" :placeholder="$t('confirmPwd')" type="password" autocomplete="off"/>
+          <template v-if="settingStore.settings.regKey === 0 || settingStore.settings.regKey === 2">
+            <label>注册码</label>
+            <el-input v-model="registerForm.code" :placeholder="settingStore.settings.regKey === 0 ? $t('regKey') : $t('regKeyOptional')" type="text" autocomplete="off"/>
+          </template>
           <div v-show="verifyShow"
                class="register-turnstile"
                :data-sitekey="settingStore.settings.siteKey"
@@ -91,20 +48,14 @@
           >
             <span style="font-size: 12px;color: #F56C6C" v-if="botJsError">{{ $t('verifyModuleFailed') }}</span>
           </div>
-          <el-button class="btn" style="margin: 0" type="primary" @click="submitRegister" :loading="registerLoading"
-          >{{ $t('regBtn') }}
-          </el-button>
-          <el-button v-if="settingStore.settings.linuxdoSwitch" class="btn" style="margin-top: 10px"  @click="linuxDoLogin">
-            <el-avatar src="/image/linuxdo.webp" :size="18" style="margin-right: 10px" />LinuxDo
-          </el-button>
-        </div>
+          <el-button class="lq-btn" type="primary" @click="submitRegister" :loading="registerLoading">{{ $t('regBtn') }}</el-button>
+        </template>
         <template v-if="settingStore.settings.register === 0">
-          <div class="switch" @click="show = 'register'" v-if="show === 'login'">{{ $t('noAccount') }}
-            <span>{{ $t('regSwitch') }}</span></div>
-          <div class="switch" @click="show = 'login'" v-else>{{ $t('hasAccount') }} <span>{{ $t('loginSwitch') }}</span>
-          </div>
+          <div class="lq-switch" @click="show = 'register'" v-if="show === 'login'">{{ $t('noAccount') }} <span>{{ $t('regSwitch') }}</span></div>
+          <div class="lq-switch" @click="show = 'login'" v-else>{{ $t('hasAccount') }} <span>{{ $t('loginSwitch') }}</span></div>
         </template>
       </div>
+      <div class="lq-login-footer">{{ settingStore.settings.title }}</div>
     </div>
     <el-dialog class="bind-dialog" v-model="showBindForm"  title="注册邮箱" >
       <div class="bind-container">
@@ -840,4 +791,67 @@ function submitRegister() {
   top: -90px;
 }
 
+
+.lq-login-page {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--lq-side);
+  color: var(--lq-text);
+  padding: 32px 16px;
+}
+.lq-login-wrap {
+  width: 100%;
+  max-width: 400px;
+}
+.lq-login-heading {
+  text-align: center;
+  margin-bottom: 18px;
+  h1 { font-size: 29px; font-weight: 600; letter-spacing: -.6px; margin: 0 0 10px; }
+  p { font-size: 14px; color: var(--lq-muted); margin: 0; }
+}
+.lq-login-symbol {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--lq-text);
+}
+.lq-login-card {
+  background: var(--lq-bg);
+  border: 1px solid var(--lq-border);
+  border-radius: 9px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  h2 { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+  > p { font-size: 13px; color: var(--lq-muted); margin: 0 0 24px; }
+  label { font-size: 13px; padding: 0 0 8px; }
+  :deep(.el-input) { margin-bottom: 18px; }
+  :deep(.el-input__wrapper) { min-height: 44px; border-radius: 6px; }
+}
+.lq-btn {
+  width: 100%;
+  height: 44px;
+  margin: 4px 0 0 !important;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  & + .lq-btn { margin-top: 10px !important; }
+}
+.lq-switch {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--lq-muted);
+  text-align: center;
+  cursor: pointer;
+  span { color: var(--lq-text); font-weight: 500; }
+}
+.lq-login-footer {
+  font-size: 12px;
+  color: var(--lq-muted);
+  margin-top: 24px;
+  text-align: center;
+}
 </style>

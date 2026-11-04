@@ -50,6 +50,7 @@
             >
               <el-checkbox :class=" props.type === 'all-email' ? 'all-email-checkbox' : 'checkbox'"
                            v-model="item.checked" @click.stop></el-checkbox>
+              <SenderAvatar v-if="compactLayout" class="lq-list-avatar" :email="item.type === 1 ? item.toEmail : item.sendEmail" :name="item.name" :size="36"/>
               <div @click.stop="starChange(item)" class="pc-star" v-if="showStar">
                 <Icon v-if="item.isStar" icon="fluent-color:star-16" width="20" height="20"/>
                 <Icon v-else icon="solar:star-line-duotone" width="18" height="18"/>
@@ -236,6 +237,7 @@
 </template>
 
 <script setup>
+import SenderAvatar from '@/components/sender-avatar/index.vue'
 import {Icon} from "@iconify/vue";
 import skeletonBlock from "@/components/email-scroll/skeleton/index.vue"
 import {computed, onActivated, reactive, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
@@ -407,7 +409,7 @@ const list = computed(() => {
 
 const itemHeight = computed(() => {
     if (props.compactLayout) {
-      return props.type === 'all-email' ? 96 : 76;
+      return props.type === 'all-email' ? 96 : 78;
     }
     if (props.type === 'all-email') {
       return isMobile.value ? 132 : 65;
@@ -1299,10 +1301,42 @@ function loadData() {
 .email-container.compact-layout {
   border-right: 1px solid var(--el-border-color);
 
+  border-right: 1px solid var(--lq-border);
+
   :deep(.email-row) {
-    height: 76px;
-    padding: 9px 0;
-    align-items: flex-start;
+    height: 78px;
+    padding: 13px 0 12px;
+    align-items: center;
+    border-bottom: 1px solid var(--lq-border);
+    box-shadow: none !important;
+
+    &:hover {
+      background-color: var(--lq-hover);
+    }
+
+    &.is-selected {
+      background-color: var(--lq-active);
+      box-shadow: none !important;
+    }
+
+    .lq-list-avatar {
+      margin-right: 12px;
+    }
+
+    .email-sender .name {
+      font-size: 13px;
+      color: var(--lq-text);
+    }
+
+    .email-subject {
+      font-size: 14px;
+      color: var(--lq-text);
+    }
+
+    .phone-time {
+      font-size: 11px !important;
+      color: var(--lq-muted) !important;
+    }
 
     &.all-email {
       height: 96px;
@@ -1311,13 +1345,11 @@ function loadData() {
     .checkbox,
     .all-email-checkbox {
       padding-left: 12px;
-      padding-right: 10px;
-      padding-top: 2px;
+      padding-right: 8px;
     }
 
     .pc-star {
-      width: 28px;
-      padding-top: 1px;
+      display: none;
     }
 
     .title {

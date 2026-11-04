@@ -212,7 +212,7 @@ function getEmailList(emailId, size) {
   height: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 380px minmax(0, 1fr);
   overflow: hidden;
   background: var(--el-bg-color);
 }

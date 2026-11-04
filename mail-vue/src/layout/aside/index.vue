@@ -1,128 +1,76 @@
 <template>
-  <el-scrollbar class="scroll">
-    <div>
-      <div class="title">
-        <Icon icon="mdi:email-outline" width="24" height="24" />
-        <div>{{ settingStore.settings.title }}</div>
-      </div>
-      <el-menu
-          :collapse="false"
-          :default-openeds="['inbox-domain']"
-          text-color="var(--lq-muted)"
-          active-text-color="var(--lq-text)"
-          style="margin-top: 10px"
-      >
-        <el-menu-item
-            @click="openGlobalInbox"
-            index="email-global"
-            :class="route.meta.name === 'email' && !accountStore.currentDomain ? 'choose-item' : ''"
-        >
-          <Icon icon="hugeicons:mailbox-01" width="20" height="20" />
-          <span class="menu-name" style="margin-left: 20px">&#x603b;&#x6536;&#x4ef6;&#x7bb1;</span>
-          <span v-if="globalInboxUnread > 0" class="domain-badge">{{ formatUnread(globalInboxUnread) }}</span>
-        </el-menu-item>
-        <el-sub-menu
-            index="inbox-domain"
-            class="inbox-domain-menu"
-            :class="route.meta.name === 'email' && accountStore.currentDomain ? 'choose-sub-menu' : ''"
-        >
-          <template #title>
-            <Icon icon="fluent:mail-multiple-20-regular" width="20" height="20" />
-            <span class="menu-name inbox-title">&#x57df;&#x540d;&#x6536;&#x4ef6;&#x7bb1;</span>
-          </template>
-          <el-menu-item
-              v-for="item in domainAccounts"
-              :key="item.domain"
-              class="domain-item"
-              :class="domainItemClass(item.domain)"
-              :index="`domain-${item.domain}`"
-              @click="selectDomain(item)"
-          >
-            <Icon icon="mdi:email-outline" width="17" height="17" />
-            <span class="domain-name">{{ item.label }}</span>
-            <span v-if="item.unreadCount > 0" class="domain-badge">{{ formatUnread(item.unreadCount) }}</span>
-          </el-menu-item>
-          <el-menu-item v-if="domainAccounts.length === 0" class="domain-item empty-domain" index="domain-empty" disabled>
-            <span>&#x6682;&#x65e0;&#x57df;&#x540d;</span>
-          </el-menu-item>
-        </el-sub-menu>
-        <el-menu-item @click="openSpam" index="spam"
-                      :class="route.meta.name === 'spam' ? 'choose-item' : ''">
-          <Icon icon="mdi:email-alert-outline" width="21" height="21" />
-          <span class="menu-name" style="margin-left: 20px">&#x5783;&#x573e;&#x90ae;&#x7bb1;</span>
-          <span v-if="spamUnread > 0" class="domain-badge">{{ formatUnread(spamUnread) }}</span>
-        </el-menu-item>
-        <el-menu-item @click="openOther" index="other"
-                      :class="route.meta.name === 'other' ? 'choose-item' : ''">
-          <Icon icon="mdi:bell-outline" width="20" height="20" />
-          <span class="menu-name" style="margin-left: 20px">其他通知</span>
-          <span v-if="otherUnread > 0" class="domain-badge">{{ formatUnread(otherUnread) }}</span>
-        </el-menu-item>
-        <el-menu-item @click="openWriter" index="write" v-perm="'email:send'">
-          <Icon icon="material-symbols:edit-outline-sharp" width="20" height="20" />
-          <span class="menu-name" style="margin-left: 20px">&#x5199;&#x4fe1;</span>
-        </el-menu-item>
-        <el-menu-item @click="router.push({name: 'send'})" index="send" v-perm="'email:send'"
-                      :class="route.meta.name === 'send' ? 'choose-item' : ''">
-          <Icon icon="cil:send" width="20" height="20" />
-          <span class="menu-name" style="margin-left: 21px">{{ $t('sent') }}</span>
-        </el-menu-item>
-        <el-menu-item @click="router.push({name: 'draft'})" index="draft" v-perm="'email:send'"
-                      :class="route.meta.name === 'draft' ? 'choose-item' : ''">
-          <Icon icon="ep:document" width="19" height="19" />
-          <span class="menu-name" style="margin-left: 22px">{{ $t('drafts') }}</span>
-        </el-menu-item>
-        <el-menu-item @click="router.push({name: 'star'})" index="star"
-                      :class="route.meta.name === 'star' ? 'choose-item' : ''">
-          <Icon icon="solar:star-line-duotone" width="20" height="20" />
-          <span class="menu-name" style="margin-left: 21px">{{ $t('starred') }}</span>
-        </el-menu-item>
-        <el-menu-item @click="router.push({name: 'setting'})" index="setting"
-                      :class="route.meta.name === 'setting' ? 'choose-item' : ''">
-          <Icon icon="fluent:settings-48-regular" width="20" height="20" />
-          <span class="menu-name" style="margin-left: 21px">{{ $t('settings') }}</span>
-        </el-menu-item>
-        <div class="manage-title" v-perm="['all-email:query','user:query','setting:query','analysis:query']">
-          <div>{{ $t('manage') }}</div>
-        </div>
-        <el-menu-item @click="router.push({name: 'analysis'})" index="analysis" v-perm="'analysis:query'"
-                      :class="route.meta.name === 'analysis' ? 'choose-item' : ''">
-          <Icon icon="solar:chart-square-line-duotone" width="24" height="24" />
-          <span class="menu-name" style="margin-left: 18px">&#x8d44;&#x4ea7;&#x6982;&#x89c8;</span>
-        </el-menu-item>
-        <el-menu-item @click="router.push({name: 'asset-center'})" index="asset-center" v-perm="'user:query'"
-                      :class="route.meta.name === 'asset-center' ? 'choose-item' : ''">
-          <Icon icon="fluent:database-person-24-regular" width="21" height="21" />
-          <span class="menu-name" style="margin-left: 20px">&#x90ae;&#x7bb1;&#x8d44;&#x4ea7;</span>
-        </el-menu-item>
-        <el-menu-item @click="openSubAccount" index="sub-account" v-perm="'user:query'"
-                      :class="route.meta.name === 'sub-account' ? 'choose-item' : ''">
-          <Icon icon="fluent:mail-inbox-add-20-regular" width="21" height="21" />
-          <span class="menu-name" style="margin-left: 20px">&#x5b50;&#x90ae;&#x7bb1;&#x7ba1;&#x7406;</span>
-        </el-menu-item>
-        <el-menu-item @click="router.push({name: 'all-email'})" index="all-email" v-perm="'all-email:query'"
-                      :class="route.meta.name === 'all-email' ? 'choose-item' : ''">
-          <Icon icon="fluent:mail-list-28-regular" width="22" height="22" />
-          <span class="menu-name" style="margin-left: 20px">{{ $t('allMail') }}</span>
-        </el-menu-item>
-        <el-menu-item v-if="false" @click="router.push({name: 'role'})" index="role" v-perm="'role:query'"
-                      :class="route.meta.name === 'role' ? 'choose-item' : ''">
-          <Icon icon="fluent:lock-closed-16-regular" width="22" height="22" />
-          <span class="menu-name" style="margin-left: 20px">{{ $t('permissions') }}</span>
-        </el-menu-item>
-        <el-menu-item v-if="false" @click="router.push({name: 'reg-key'})" index="reg-key" v-perm="'reg-key:query'"
-                      :class="route.meta.name === 'reg-key' ? 'choose-item' : ''">
-          <Icon icon="fluent:fingerprint-20-filled" width="22" height="22" />
-          <span class="menu-name" style="margin-left: 20px">{{ $t('inviteCode') }}</span>
-        </el-menu-item>
-        <el-menu-item @click="router.push({name: 'sys-setting'})" index="sys-setting" v-perm="'setting:query'"
-                      :class="route.meta.name === 'sys-setting' ? 'choose-item' : ''">
-          <Icon icon="eos-icons:system-ok-outlined" width="18" height="18" style="margin-left: 2px" />
-          <span class="menu-name" style="margin-left: 22px">{{ $t('SystemSettings') }}</span>
-        </el-menu-item>
-      </el-menu>
+  <div class="lq-side">
+    <div class="lq-brand">
+      <span class="lq-avatar">{{ brandLetter }}</span>
+      <span class="lq-brand-name">{{ settingStore.settings.title || 'NTMCN Mail' }}</span>
     </div>
-  </el-scrollbar>
+    <div class="lq-account" :title="userStore.user?.email">
+      <Icon icon="lucide:at-sign" width="14" height="14"/>
+      <span>{{ userStore.user?.email }}</span>
+    </div>
+    <button v-perm="'email:send'" class="lq-compose" @click="openWriter">
+      <Icon icon="lucide:pencil" width="16" height="16"/>
+      <span>写信</span>
+    </button>
+
+    <el-scrollbar class="lq-scroll">
+      <nav class="lq-folders">
+        <a :class="{on: route.meta.name === 'email' && !accountStore.currentDomain}" @click="openGlobalInbox">
+          <Icon icon="lucide:inbox" width="17" height="17"/><span class="n">收件箱</span>
+          <span v-if="globalInboxUnread > 0" class="c">{{ formatUnread(globalInboxUnread) }}</span>
+        </a>
+        <a class="sub-toggle" @click="domainOpen = !domainOpen">
+          <Icon icon="lucide:globe" width="17" height="17"/><span class="n">域名收件箱</span>
+          <Icon class="arrow" :class="{open: domainOpen}" icon="lucide:chevron-down" width="15" height="15"/>
+        </a>
+        <template v-if="domainOpen">
+          <a v-for="item in domainAccounts" :key="item.domain" class="sub"
+             :class="{on: route.meta.name === 'email' && accountStore.currentDomain === item.domain}"
+             @click="selectDomain(item)">
+            <span class="n">{{ item.label }}</span>
+            <span v-if="item.unreadCount > 0" class="c">{{ formatUnread(item.unreadCount) }}</span>
+          </a>
+        </template>
+        <a :class="{on: route.meta.name === 'other'}" @click="openOther">
+          <Icon icon="lucide:bell" width="17" height="17"/><span class="n">其他通知</span>
+          <span v-if="otherUnread > 0" class="c">{{ formatUnread(otherUnread) }}</span>
+        </a>
+        <a :class="{on: route.meta.name === 'spam'}" @click="openSpam">
+          <Icon icon="lucide:shield-alert" width="17" height="17"/><span class="n">垃圾邮件</span>
+          <span v-if="spamUnread > 0" class="c">{{ formatUnread(spamUnread) }}</span>
+        </a>
+        <a v-perm="'email:send'" :class="{on: route.meta.name === 'send'}" @click="router.push({name: 'send'})">
+          <Icon icon="lucide:send" width="17" height="17"/><span class="n">已发送</span>
+        </a>
+        <a v-perm="'email:send'" :class="{on: route.meta.name === 'draft'}" @click="router.push({name: 'draft'})">
+          <Icon icon="lucide:file-text" width="17" height="17"/><span class="n">草稿箱</span>
+        </a>
+        <a :class="{on: route.meta.name === 'star'}" @click="router.push({name: 'star'})">
+          <Icon icon="lucide:star" width="17" height="17"/><span class="n">星标邮件</span>
+        </a>
+
+        <div class="lq-group" v-perm="['all-email:query','user:query','setting:query','analysis:query']">管理</div>
+        <a v-perm="'analysis:query'" :class="{on: route.meta.name === 'analysis'}" @click="router.push({name: 'analysis'})">
+          <Icon icon="lucide:chart-column" width="17" height="17"/><span class="n">资产概览</span>
+        </a>
+        <a v-perm="'user:query'" :class="{on: route.meta.name === 'asset-center'}" @click="router.push({name: 'asset-center'})">
+          <Icon icon="lucide:database" width="17" height="17"/><span class="n">邮箱资产</span>
+        </a>
+        <a v-perm="'user:query'" :class="{on: route.meta.name === 'sub-account'}" @click="openSubAccount">
+          <Icon icon="lucide:users" width="17" height="17"/><span class="n">子邮箱管理</span>
+        </a>
+        <a v-perm="'all-email:query'" :class="{on: route.meta.name === 'all-email'}" @click="router.push({name: 'all-email'})">
+          <Icon icon="lucide:list" width="17" height="17"/><span class="n">全部邮件</span>
+        </a>
+        <a :class="{on: route.meta.name === 'setting'}" @click="router.push({name: 'setting'})">
+          <Icon icon="lucide:user-cog" width="17" height="17"/><span class="n">个人设置</span>
+        </a>
+        <a v-perm="'setting:query'" :class="{on: route.meta.name === 'sys-setting'}" @click="router.push({name: 'sys-setting'})">
+          <Icon icon="lucide:settings" width="17" height="17"/><span class="n">系统设置</span>
+        </a>
+      </nav>
+    </el-scrollbar>
+  </div>
 </template>
 
 <script setup>
@@ -147,6 +95,8 @@ const domainStats = ref({})
 const globalInboxUnread = ref(0)
 const spamUnread = ref(0)
 const otherUnread = ref(0)
+const domainOpen = ref(true)
+const brandLetter = computed(() => String(settingStore.settings.title || 'N').trim().charAt(0).toUpperCase())
 
 const domainAccounts = computed(() => (settingStore.domainList || []).map(domain => {
   const clean = cleanDomain(domain)
@@ -314,147 +264,94 @@ function cleanDomain(domain) {
 </script>
 
 <style lang="scss" scoped>
-.title {
-  margin: 15px 10px;
-  height: 45px;
-  border-radius: 6px;
+.lq-side {
+  width: 232px;
+  height: 100%;
   display: flex;
-  position: relative;
-  font-size: 16px;
-  font-weight: bold;
+  flex-direction: column;
+  background: var(--lq-side);
+  border-right: 1px solid var(--lq-border);
+  color: var(--lq-text);
+}
+.lq-brand {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
-  color: var(--lq-on-primary);
+  gap: 10px;
+  height: 60px;
+  padding: 0 18px;
+  flex: none;
+}
+.lq-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   background: var(--lq-primary);
-  transition: all 0.3s ease;
-  max-width: 240px;
-  padding: 0 10px;
-
-  > div {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    max-width: calc(240px - 20px - 30px);
-  }
-
-  :deep(.el-icon) {
-    flex-shrink: 0;
-    font-size: 20px;
-  }
+  color: var(--lq-on-primary);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 15px;
 }
-
-.manage-title {
-  margin-top: 10px;
-  padding-left: 20px;
-  color: var(--lq-muted);
-  font-size: 12px;
-}
-
-.el-menu-item {
-  margin: 5px 10px !important;
-  border-radius: 6px;
-  height: 36px;
-  padding: 10px !important;
-}
-
-.choose-item {
+.lq-brand-name {
   font-weight: 600;
-  color: var(--lq-text) !important;
-  background: var(--lq-active) !important;
-}
-
-.choose-sub-menu :deep(.el-sub-menu__title) {
-  font-weight: 600;
-  color: var(--lq-text) !important;
-  background: var(--lq-active) !important;
-}
-
-.inbox-title {
-  margin-left: 21px;
-  flex: 1;
-}
-
-.domain-item {
-  display: grid !important;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  margin-top: 3px !important;
-  margin-bottom: 3px !important;
-  padding-left: 30px !important;
-}
-
-.domain-current:not(.choose-item) {
-  background: transparent !important;
-}
-
-.domain-name {
-  overflow: hidden;
+  font-size: 15px;
   white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.domain-badge {
-  min-width: 22px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: transparent;
+.lq-account {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 18px 12px;
   color: var(--lq-muted);
   font-size: 12px;
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+.lq-compose {
+  margin: 0 12px 10px;
+  height: 38px;
+  border-radius: 7px;
+  background: var(--lq-primary);
+  color: var(--lq-on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-weight: 500;
-  line-height: 18px;
-  text-align: center;
+  cursor: pointer;
+  flex: none;
+  &:hover { opacity: .88; }
 }
-
-.empty-domain {
-  color: var(--lq-muted) !important;
+.lq-scroll {
+  flex: 1;
+  min-height: 0;
 }
-
-@media (hover: hover) {
-  .el-menu-item:hover,
-  :deep(.el-sub-menu__title:hover) {
-    background: var(--lq-hover) !important;
-    color: var(--lq-text) !important;
+.lq-folders {
+  padding: 4px 0 16px;
+  a {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    height: 38px;
+    margin: 2px 10px;
+    padding: 0 12px;
+    border-radius: 6px;
+    color: var(--lq-muted);
+    cursor: pointer;
+    user-select: none;
+    font-size: 14px;
+    .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lq-text); }
+    .c { color: var(--lq-muted); font-size: 12px; font-weight: 500; }
+    &:hover { background: var(--lq-hover); }
+    &.on { background: var(--lq-active); color: var(--lq-text); .n { font-weight: 600; } }
+    &.sub { height: 34px; padding-left: 40px; font-size: 13px; }
   }
+  .arrow { transition: transform .15s; transform: rotate(-90deg); &.open { transform: rotate(0); } }
 }
-
-.menu-name {
-  user-select: none;
-}
-
-:deep(.el-scrollbar__wrap--hidden-default ) {
-  background: var(--aside-backgound) !important;
-}
-
-:deep(.el-menu-item) {
-  background: var(--aside-backgound);
-}
-
-:deep(.el-sub-menu__title) {
-  margin: 5px 10px !important;
-  border-radius: 6px;
-  height: 36px;
-  padding: 10px !important;
-  color: var(--lq-muted) !important;
-}
-
-:deep(.el-sub-menu__title .el-sub-menu__icon-arrow) {
-  color: var(--lq-muted);
-}
-
-:deep(.el-menu) {
-  background: var(--aside-backgound);
-}
-
-.el-menu {
-  border-right: 0;
-  width: 260px;
-}
-
-:deep(.el-divider__text) {
-  background: var(--aside-backgound);
+.lq-group {
+  margin: 16px 22px 6px;
+  font-size: 12px;
   color: var(--lq-muted);
 }
 </style>

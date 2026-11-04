@@ -261,6 +261,11 @@ function formatName(email) {
 }
 </style>
 <style lang="scss" scoped>
+/* LanQin：写信按钮在侧栏，桌面端顶栏不再重复 */
+@media (min-width: 1025px) {
+  .writer-box { display: none !important; }
+}
+
 
 :deep(.el-popper.is-pure) {
   border-radius: 6px;
