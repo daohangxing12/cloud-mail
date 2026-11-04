@@ -393,31 +393,6 @@
             </div>
           </div>
 
-          <div class="settings-card asset-sync-card">
-            <div class="card-title">资产同步与高级管理</div>
-            <div class="card-content">
-              <div class="sync-tips">
-                这里给本地矩阵工具用：软件把邮箱账号、TikTok 用户名、粉丝/播放数据同步到 Cloudflare 资产中心。
-              </div>
-              <div class="sync-line">
-                <span>矩阵同步地址</span>
-                <strong>{{ syncAccountUrl }}</strong>
-                <el-button size="small" type="primary" @click="copyText(syncAccountUrl)">复制</el-button>
-              </div>
-              <div class="sync-line">
-                <span>本地 Agent 地址</span>
-                <strong>{{ localAgentBaseUrl }}</strong>
-                <el-button size="small" type="primary" @click="copyText(localAgentBaseUrl)">复制</el-button>
-              </div>
-              <div class="advanced-buttons">
-                <el-button size="small" type="primary" @click="openRoute('asset-center')">邮箱资产</el-button>
-                <el-button size="small" @click="openRoute('user')">用户列表</el-button>
-                <el-button size="small" @click="openRoute('role')">权限控制</el-button>
-                <el-button size="small" @click="openRoute('reg-key')">注册密钥</el-button>
-              </div>
-            </div>
-          </div>
-
           <div class="settings-card about">
             <div class="card-title">{{ $t('about') }}</div>
             <div class="card-content">

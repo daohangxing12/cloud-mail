@@ -112,7 +112,7 @@ app.post('/mailDomain/add', guard(async (c, p) => {
 
 	// 开启 Email Routing 并写入 MX/SPF
 	try {
-		await cf(c, 'POST', `/zones/${zone.id}/email/routing/dns`, { name: domain });
+		await cf(c, 'POST', `/zones/${zone.id}/email/routing/dns`, zone.name === domain ? {} : { name: domain });
 		steps.push('写入收信 DNS 记录');
 	} catch (e) {
 		steps.push('收信 DNS：' + String(e.message || e).slice(0, 120));

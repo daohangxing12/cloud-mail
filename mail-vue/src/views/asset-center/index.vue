@@ -114,18 +114,6 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="播放" width="120" align="right">
-            <template #default="{row}">
-              <el-input-number
-                  v-model="row.editTiktokViews"
-                  :min="0"
-                  :controls="false"
-                  size="small"
-                  class="ac-num"
-                  @change="saveMetricField(row, 'tiktokViews', 'editTiktokViews')"
-              />
-            </template>
-          </el-table-column>
 
           <el-table-column label="中视频" width="120">
             <template #default="{row}">

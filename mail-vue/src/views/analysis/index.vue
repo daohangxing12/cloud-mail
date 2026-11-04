@@ -1,11 +1,11 @@
-﻿<template>
+<template>
   <el-scrollbar class="overview-scroll">
     <div class="asset-overview" v-loading="loading">
       <section class="hero">
         <div>
           <p class="eyebrow">资产概览</p>
           <h1>邮箱账号资产统计</h1>
-          <p class="subtitle">这里先暴露需要处理的账号，再看整体资产盘子。能处理的中视频、异常状态、未同步资产都可以直接跳到邮箱资产列表。</p>
+          <p class="subtitle">邮箱、TikTok 识别和中视频进度一览，点卡片可直接跳到邮箱资产列表。</p>
         </div>
         <el-button type="primary" :loading="loading" @click="load">刷新统计</el-button>
       </section>
@@ -58,20 +58,6 @@
           </div>
           <el-progress :percentage="summary.tiktokRate" :stroke-width="10" />
         </div>
-        <div class="ratio-card">
-          <div class="ratio-head">
-            <span>BitBrowser 同步率</span>
-            <strong>{{ summary.bitBrowserRate }}%</strong>
-          </div>
-          <el-progress :percentage="summary.bitBrowserRate" :stroke-width="10" color="#13b981" />
-        </div>
-        <div class="ratio-card">
-          <div class="ratio-head">
-            <span>本地同步覆盖率</span>
-            <strong>{{ summary.syncRate }}%</strong>
-          </div>
-          <el-progress :percentage="summary.syncRate" :stroke-width="10" color="#f59e0b" />
-        </div>
       </section>
 
       <section class="panel-grid">
@@ -90,38 +76,11 @@
             </el-table-column>
             <el-table-column prop="total" label="邮箱数" width="100" />
             <el-table-column prop="tiktokLinked" label="已识别 TikTok" width="130" />
-            <el-table-column prop="bitBrowserLinked" label="已同步浏览器" width="130" />
             <el-table-column prop="creatorReady" label="疑似达标" width="110" />
             <el-table-column prop="creatorReadyTodo" label="待处理" width="100" />
           </el-table>
         </article>
 
-        <article class="panel status-panel">
-          <div class="panel-title">
-            <div>
-              <h2>状态检查</h2>
-              <p>异常账号和未同步账号会优先暴露，方便你回到本地软件处理。</p>
-            </div>
-          </div>
-          <div class="status-list">
-            <div
-                v-for="item in summary.statuses"
-                :key="item.loginStatus"
-                class="status-row"
-                :class="{clickable: canOpenAssets}"
-                @click="openStatusAssets(item)"
-            >
-              <span>{{ item.loginStatus }}</span>
-              <strong>{{ formatNumber(item.total) }}</strong>
-            </div>
-            <el-empty v-if="!loading && summary.statuses.length === 0" description="暂无状态数据" />
-          </div>
-          <div class="tips">
-            <div><span>中视频参考规则</span><b>粉丝 {{ formatNumber(summary.thresholds.followers) }}+ / 播放 {{ formatNumber(summary.thresholds.views) }}+</b></div>
-            <div><span>最近账号同步</span><b>{{ formatTime(summary.latestAgentSyncAt) }}</b></div>
-            <div><span>最近数据同步</span><b>{{ formatTime(summary.latestStatsSyncAt) }}</b></div>
-          </div>
-        </article>
       </section>
     </div>
   </el-scrollbar>
@@ -156,22 +115,6 @@ const actionCards = computed(() => [
     icon: 'solar:cup-star-linear',
     tone: 'gold',
     query: {creatorTodo: '1'}
-  },
-  {
-    title: '异常状态',
-    value: formatNumber(summary.value.abnormalTotal),
-    desc: '登录状态不是正常/在线，优先回本地处理',
-    icon: 'mdi:alert-circle-outline',
-    tone: 'red',
-    query: {loginHealth: 'abnormal'}
-  },
-  {
-    title: '未同步资产',
-    value: formatNumber(summary.value.unsyncedTotal),
-    desc: '还没有本地矩阵同步时间的账号',
-    icon: 'tabler:cloud-question',
-    tone: 'slate',
-    query: {syncState: 'unsynced'}
   }
 ])
 
@@ -191,14 +134,6 @@ const cards = computed(() => [
     icon: 'ri:tiktok-fill',
     tone: 'dark',
     query: {tiktokLinked: '1'}
-  },
-  {
-    title: '已同步浏览器',
-    value: formatNumber(summary.value.bitBrowserLinked),
-    desc: '来自 BitBrowser / 矩阵工具同步',
-    icon: 'fluent:window-dev-tools-20-regular',
-    tone: 'green',
-    query: {bitBrowserLinked: '1'}
   },
   {
     title: '中视频达标总数',
@@ -239,22 +174,6 @@ const cards = computed(() => [
     icon: 'solar:lock-keyhole-linear',
     tone: 'slate',
     query: {creatorStatus: '无权限'}
-  },
-  {
-    title: '异常状态',
-    value: formatNumber(summary.value.abnormalTotal),
-    desc: '登录状态不是正常/在线的账号',
-    icon: 'mdi:alert-circle-outline',
-    tone: 'red',
-    query: {loginHealth: 'abnormal'}
-  },
-  {
-    title: '未同步资产',
-    value: formatNumber(summary.value.unsyncedTotal),
-    desc: '后面由本地矩阵工具补齐',
-    icon: 'tabler:cloud-question',
-    tone: 'slate',
-    query: {syncState: 'unsynced'}
   }
 ])
 
@@ -513,7 +432,7 @@ function formatTime(value) {
 .ratio-grid,
 .panel-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
 }
 
@@ -540,7 +459,7 @@ function formatTime(value) {
 }
 
 .panel-grid {
-  grid-template-columns: 1.3fr 0.7fr;
+  grid-template-columns: 1fr;
 }
 
 .panel {
