@@ -6,8 +6,16 @@
     <el-scrollbar class="scroll" v-if="!firstLoading">
       <div class="scroll-body">
         <div class="ss-wrap">
+          <nav class="ss-nav">
+            <div class="ss-nav-title">系统设置</div>
+            <a v-for="item in ssTabs" :key="item.key" :class="{on: ssTab === item.key}" @click="ssTab = item.key">
+              <Icon :icon="item.icon" width="17" height="17"/>
+              <span>{{ item.label }}</span>
+            </a>
+          </nav>
+          <div class="ss-body">
 
-          <div class="ss-card">
+          <div class="ss-card" v-show="ssTab === 'account'">
             <div class="ss-title">账号</div>
             <div class="ss-row">
               <div class="ss-text"><b>修改登录密码</b><span>登录用 admin + 这个密码</span></div>
@@ -19,7 +27,7 @@
             </div>
           </div>
 
-          <div class="ss-card">
+          <div class="ss-card" v-show="ssTab === 'receive'">
             <div class="ss-title">收信</div>
             <div class="ss-row">
               <div class="ss-text"><b>接收邮件</b><span>关掉后所有域名都收不到信</span></div>
@@ -49,7 +57,7 @@
             </div>
           </div>
 
-          <div class="ss-card">
+          <div class="ss-card" v-show="ssTab === 'send'">
             <div class="ss-title">发信</div>
             <div class="ss-row">
               <div class="ss-text"><b>允许发信</b><span>关掉后网站里不能写信发送</span></div>
@@ -61,7 +69,7 @@
             </div>
           </div>
 
-          <div class="ss-card">
+          <div class="ss-card" v-show="ssTab === 'notify'">
             <div class="ss-title">通知 / 转发</div>
             <div class="ss-row">
               <div class="ss-text"><b>推送到 Telegram</b><span>{{ setting.tgBotStatus === 0 ? '已开启' : '未开启' }}：新邮件发到 TG 机器人</span></div>
@@ -77,8 +85,8 @@
             </div>
           </div>
 
-          <el-collapse class="ss-adv">
-            <el-collapse-item title="高级设置（平时不用动）" name="adv">
+          <div class="ss-card" v-show="ssTab === 'advanced'">
+            <div class="ss-title">高级（平时不用动）</div>
               <div class="ss-row">
                 <div class="ss-text"><b>开放注册</b><span>允许陌生人在登录页自己注册账号（自用建议关）</span></div>
                 <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1" v-model="setting.register"/>
@@ -135,8 +143,8 @@
                 <div class="ss-text"><b>登录后弹窗公告</b><span>{{ setting.notice === 0 ? '已开启' : '未开启' }}</span></div>
                 <el-button size="small" @click="openNoticePopupSetting">设置</el-button>
               </div>
-            </el-collapse-item>
-          </el-collapse>
+          </div>
+          </div>
         </div>
       </div>
 
@@ -1498,6 +1506,16 @@ async function applySendDns(row) {
     sendLoading.value = false
   }
 }
+// ===== 左侧分类 =====
+const ssTabs = [
+  {key: 'receive', label: '收信', icon: 'lucide:inbox'},
+  {key: 'send', label: '发信', icon: 'lucide:send'},
+  {key: 'notify', label: '通知 / 转发', icon: 'lucide:bell'},
+  {key: 'account', label: '账号', icon: 'lucide:user'},
+  {key: 'advanced', label: '高级', icon: 'lucide:sliders-horizontal'}
+]
+const ssTab = ref('receive')
+
 // ===== 修改登录密码 =====
 const pwdDialogShow = ref(false)
 const pwdLoading = ref(false)
@@ -1715,43 +1733,76 @@ function removeMailDomain(row) {
 }
 
 .ss-wrap {
-  max-width: 820px;
-  margin: 0 auto;
-  padding: 20px 16px 40px;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100%;
+  @media (max-width: 767px) {
+    grid-template-columns: 1fr;
+  }
+}
+.ss-nav {
+  border-right: 1px solid var(--lq-border);
+  padding: 18px 10px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 2px;
+  @media (max-width: 767px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--lq-border);
+    padding: 10px;
+  }
+  a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 6px;
+    color: var(--lq-muted);
+    cursor: pointer;
+    span { color: var(--lq-text); }
+    &:hover { background: var(--lq-hover); }
+    &.on { background: var(--lq-active); color: var(--lq-text); span { font-weight: 600; } }
+  }
 }
-.ss-card, .ss-adv {
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
-  padding: 6px 18px;
+.ss-nav-title {
+  font-size: 12px;
+  color: var(--lq-muted);
+  padding: 0 12px 8px;
+  @media (max-width: 767px) { display: none; }
 }
-.ss-adv { padding: 0 18px; }
-.ss-adv :deep(.el-collapse-item__header) { font-size: 15px; font-weight: 600; border: 0; background: transparent; }
-.ss-adv :deep(.el-collapse-item__wrap) { border: 0; background: transparent; }
-.ss-adv:deep(.el-collapse), .ss-adv { border-top: 1px solid var(--el-border-color-lighter); border-bottom: 1px solid var(--el-border-color-lighter); }
+.ss-body {
+  padding: 24px 32px 48px;
+  max-width: 860px;
+  @media (max-width: 767px) { padding: 16px; }
+}
+.ss-card {
+  background: transparent;
+}
 .ss-title {
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 600;
-  padding: 12px 0 6px;
+  padding: 0 0 16px;
+  color: var(--lq-text);
 }
 .ss-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 0;
-  border-top: 1px solid var(--el-border-color-extra-light);
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--lq-border);
+  .ss-title + & { border-top: 1px solid var(--lq-border); }
 }
 .ss-text {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
-  b { font-weight: 500; font-size: 14px; }
-  span { font-size: 12px; color: var(--el-text-color-secondary); }
+  b { font-weight: 500; font-size: 14px; color: var(--lq-text); }
+  span { font-size: 12px; color: var(--lq-muted); }
 }
 .card-grid {
 

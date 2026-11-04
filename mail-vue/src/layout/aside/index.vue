@@ -4,10 +4,6 @@
       <span class="lq-avatar">{{ brandLetter }}</span>
       <span class="lq-brand-name">{{ settingStore.settings.title || 'NTMCN Mail' }}</span>
     </div>
-    <div class="lq-account" :title="userStore.user?.email">
-      <Icon icon="lucide:at-sign" width="14" height="14"/>
-      <span>{{ userStore.user?.email }}</span>
-    </div>
     <button v-perm="'email:send'" class="lq-compose" @click="openWriter">
       <Icon icon="lucide:pencil" width="16" height="16"/>
       <span>写信</span>
@@ -61,9 +57,6 @@
         </a>
         <a v-perm="'all-email:query'" :class="{on: route.meta.name === 'all-email'}" @click="router.push({name: 'all-email'})">
           <Icon icon="lucide:list" width="17" height="17"/><span class="n">全部邮件</span>
-        </a>
-        <a :class="{on: route.meta.name === 'setting'}" @click="router.push({name: 'setting'})">
-          <Icon icon="lucide:user-cog" width="17" height="17"/><span class="n">个人设置</span>
         </a>
         <a v-perm="'setting:query'" :class="{on: route.meta.name === 'sys-setting'}" @click="router.push({name: 'sys-setting'})">
           <Icon icon="lucide:settings" width="17" height="17"/><span class="n">系统设置</span>
@@ -277,7 +270,7 @@ function cleanDomain(domain) {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 60px;
+  height: 64px;
   padding: 0 18px;
   flex: none;
 }
