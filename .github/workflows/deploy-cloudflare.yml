@@ -16,7 +16,8 @@ jobs:
     env:
       NAME: ${{ secrets.NAME || vars.NAME || 'cloud-mail' }}
       CUSTOM_DOMAIN: 212202.xyz
-      DOMAIN: ${{ secrets.DOMAIN || vars.DOMAIN }}
+      # 收信域名（第一个是默认后缀）。orz.gay 已停用，2026-11-04 移除
+      DOMAIN: '["ntmcn.com","baofa.de","feilong168.com","212202.xyz"]'
       ADMIN: ${{ secrets.ADMIN || vars.ADMIN }}
       JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
