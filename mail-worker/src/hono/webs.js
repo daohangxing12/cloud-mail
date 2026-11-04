@@ -26,4 +26,5 @@ import '../api/asset-api'
 import '../api/desktop-sync-api'
 import '../api/batch-api'
 import '../api/resend-domain-api'
+import '../api/mail-domain-api'
 export default app;

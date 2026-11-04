@@ -7,8 +7,11 @@ import kvObjService from './service/kv-obj-service';
 import oauthService from "./service/oauth-service";
 import analysisService from './service/analysis-service';
 import batchToolHtml from './batch-tool/tool-html';
+import { withExtraDomains } from './utils/extra-domains';
 export default {
 	 async fetch(req, env, ctx) {
+
+		env = await withExtraDomains(env);
 
 		const url = new URL(req.url)
 
@@ -32,8 +35,11 @@ export default {
 
 		return env.assets.fetch(req);
 	},
-	email: email,
+	async email(message, env, ctx) {
+		return email(message, await withExtraDomains(env), ctx);
+	},
 	async scheduled(c, env, ctx) {
+		env = await withExtraDomains(env);
 		if (c.cron === '*/30 * * * *') {
 			await analysisService.refreshEchartsCache({ env })
 			return;

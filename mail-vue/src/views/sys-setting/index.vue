@@ -195,6 +195,12 @@
                 </div>
               </div>
               <div class="setting-item">
+                <div><span>收信域名</span></div>
+                <div>
+                  <el-button class="opt-button" style="margin-top: 0" @click="openMailDomain" size="small" type="primary">管理</el-button>
+                </div>
+              </div>
+              <div class="setting-item">
                 <div><span>{{ $t('blackList') }}</span></div>
                 <div>
                   <el-button class="opt-button" style="margin-top: 0" @click="openBlackListForm" size="small"
@@ -653,6 +659,44 @@
           </div>
         </template>
       </el-dialog>
+      <el-dialog v-model="mailDomainShow" title="收信域名" width="720">
+        <div class="send-domain">
+          <el-alert v-if="!mailDomainInfo.hasToken" type="warning" :closable="false"
+                    title="还没有配置 CF_MAIL_TOKEN：请在 Cloudflare 的 cloud-mail Worker → 设置 → 变量和密钥 里添加一个名为 CF_MAIL_TOKEN 的密钥后，才能一键解析。"/>
+          <div class="sd-row" style="margin-top: 10px">
+            <el-input v-model="mailDomainInput" placeholder="要收信的域名，例如 flyvg.com（需已托管在这个 Cloudflare 账号）" @keyup.enter="addMailDomain(false)"/>
+            <el-button type="primary" :loading="mailDomainLoading" :disabled="!mailDomainInfo.hasToken" @click="addMailDomain(false)">一键添加</el-button>
+            <el-button :loading="mailDomainLoading" @click="loadMailDomains">刷新</el-button>
+          </div>
+          <p class="sd-hint">一键添加会自动：开启 Cloudflare 收信、写入 MX/SPF、把该域名全部邮件转进本系统、加入域名列表。添加后刷新页面即可在各处选择这个域名。</p>
+          <div v-if="mailDomainSteps.length" class="sd-hint" style="color: var(--el-color-success)">{{ mailDomainSteps.join(' → ') }}</div>
+          <el-table :data="mailDomainInfo.list" size="small" empty-text="暂无">
+            <el-table-column prop="domain" label="域名" min-width="140"/>
+            <el-table-column label="收信" width="90">
+              <template #default="{row}">
+                <el-tag size="small" :type="row.routing === 'enabled' ? 'success' : (row.zone ? 'warning' : 'info')">
+                  {{ row.routing === 'enabled' ? '已开启' : (row.zone ? '未开启' : (mailDomainInfo.hasToken ? '不在账号' : '—')) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="MX" min-width="170" :show-overflow-tooltip="true">
+              <template #default="{row}">{{ (row.mx || []).join(', ') || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="全收转到" min-width="130" :show-overflow-tooltip="true">
+              <template #default="{row}">{{ row.catchAll || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="" width="110">
+              <template #default="{row}">
+                <span v-if="row.fixed" class="sd-hint" style="margin: 0">部署配置</span>
+                <el-button v-else size="small" link type="danger" @click="removeMailDomain(row)">从列表移除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <p v-if="mailDomainInfo.list.some(x => x.error)" class="sd-hint" style="color: var(--el-color-danger)">
+            {{ mailDomainInfo.list.find(x => x.error).error }}
+          </p>
+        </div>
+      </el-dialog>
       <el-dialog v-model="sendDomainShow" title="发信域名（Resend）" width="680">
         <div class="send-domain">
           <div class="sd-row">
@@ -885,7 +929,7 @@
 <script setup>
 import {computed, defineOptions, nextTick, reactive, ref} from "vue";
 import {deleteBackground, setBackground, setBlackList, settingQuery, settingSet} from "@/request/setting.js";
-import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey, sendSenderList, sendSenderSave} from "@/request/resend-domain.js";
+import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey, sendSenderList, sendSenderSave, mailDomainList, mailDomainAdd, mailDomainRemove} from "@/request/resend-domain.js";
 import {useSettingStore} from "@/store/setting.js";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
@@ -1733,6 +1777,58 @@ async function applySendDns(row) {
   } catch (e) {} finally {
     sendLoading.value = false
   }
+}
+// ===== 收信域名 =====
+const mailDomainShow = ref(false)
+const mailDomainLoading = ref(false)
+const mailDomainInput = ref('')
+const mailDomainSteps = ref([])
+const mailDomainInfo = reactive({hasToken: true, list: []})
+
+async function loadMailDomains() {
+  mailDomainLoading.value = true
+  try {
+    Object.assign(mailDomainInfo, await mailDomainList())
+  } catch (e) {} finally {
+    mailDomainLoading.value = false
+  }
+}
+
+function openMailDomain() {
+  mailDomainShow.value = true
+  mailDomainSteps.value = []
+  loadMailDomains()
+}
+
+async function addMailDomain(removeOld) {
+  const domain = mailDomainInput.value.trim()
+  if (!domain) return
+  mailDomainLoading.value = true
+  try {
+    const data = await mailDomainAdd(domain, removeOld)
+    if (data.needConfirm) {
+      mailDomainLoading.value = false
+      try {
+        await ElMessageBox.confirm(`${data.domain} 现在有这些旧的收信记录，继续会删除它们（原来的邮局将收不到这个域名的信）：${data.oldRecords.join('；')}`, '删除旧记录？', {confirmButtonText: '删除并继续', cancelButtonText: '取消', type: 'warning'})
+      } catch (e) {
+        return
+      }
+      return addMailDomain(true)
+    }
+    mailDomainSteps.value = data.steps || []
+    mailDomainInput.value = ''
+    ElMessage({message: `${data.domain} 已添加，刷新页面后各处可选`, type: 'success', plain: true})
+    await loadMailDomains()
+  } catch (e) {} finally {
+    mailDomainLoading.value = false
+  }
+}
+
+function removeMailDomain(row) {
+  ElMessageBox.confirm(`从列表移除 ${row.domain}？不会改 DNS，也不会删除邮件和子邮箱；移除后这个域名的新邮件会进「无人收件」。`, {confirmButtonText: '移除', cancelButtonText: '取消', type: 'warning'}).then(async () => {
+    await mailDomainRemove(row.domain)
+    await loadMailDomains()
+  }).catch(() => {})
 }
 </script>
 

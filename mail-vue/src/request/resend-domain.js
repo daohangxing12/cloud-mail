@@ -8,3 +8,6 @@ export const resendDomainApplyDns = (id) => http.post('/resendDomain/applyDns', 
 export const resendSaveKey = (key) => http.post('/resendDomain/saveKey', {key})
 export const sendSenderList = () => http.post('/sendSender/list', {}, {noMsg: true})
 export const sendSenderSave = (emails) => http.post('/sendSender/save', {emails})
+export const mailDomainList = () => http.post('/mailDomain/list', {})
+export const mailDomainAdd = (domain, removeOld = false) => http.post('/mailDomain/add', {domain, removeOld})
+export const mailDomainRemove = (domain) => http.post('/mailDomain/remove', {domain})
