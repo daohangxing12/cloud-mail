@@ -6,3 +6,5 @@ export const resendDomainAdd = (domain) => http.post('/resendDomain/add', {domai
 export const resendDomainVerify = (id) => http.post('/resendDomain/verify', {id})
 export const resendDomainApplyDns = (id) => http.post('/resendDomain/applyDns', {id})
 export const resendSaveKey = (key) => http.post('/resendDomain/saveKey', {key})
+export const sendSenderList = () => http.post('/sendSender/list', {}, {noMsg: true})
+export const sendSenderSave = (emails) => http.post('/sendSender/save', {emails})

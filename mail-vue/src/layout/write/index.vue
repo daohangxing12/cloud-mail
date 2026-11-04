@@ -134,6 +134,7 @@ import {useI18n} from "vue-i18n";
 import router from "@/router/index.js";
 import {ElMessageBox} from "element-plus";
 import {accountList} from "@/request/account.js";
+import {sendSenderList} from "@/request/resend-domain.js";
 
 defineExpose({
   open,
@@ -162,6 +163,7 @@ const senderAccounts = ref([])
 const senderAccountsLoading = ref(false)
 let senderAccountsLoaded = false
 let senderAccountsPromise = null
+let configuredSenders = false
 let selectStatus = false
 const backReply = reactive({
   receiveEmail: [],
@@ -284,6 +286,7 @@ function setSender(account) {
 
 function addSenderAccount(account) {
   if (!account?.accountId || !isEmail(account.email)) return
+  if (configuredSenders) return
 
   const existingIndex = senderAccounts.value.findIndex(item => String(item.accountId) === String(account.accountId))
   if (existingIndex >= 0) {
@@ -313,12 +316,36 @@ function changeSender(accountId) {
   if (account) setSender(account)
 }
 
+function ensureConfiguredSender() {
+  if (!configuredSenders || senderAccounts.value.length === 0) return
+  const inList = senderAccounts.value.some(item => String(item.accountId) === String(form.accountId))
+  if (!inList) setSender(senderAccounts.value[0])
+}
+
 async function loadSenderAccounts() {
-  if (senderAccountsLoaded) return senderAccounts.value
+  if (senderAccountsLoaded) {
+    ensureConfiguredSender()
+    return senderAccounts.value
+  }
   if (senderAccountsPromise) return senderAccountsPromise
 
   senderAccountsLoading.value = true
   senderAccountsPromise = (async () => {
+    // 系统设置里配置了发件地址时，只显示这几个
+    try {
+      const configured = await sendSenderList()
+      const list = (configured?.list || []).filter(item => item?.accountId && isEmail(item.email))
+      if (list.length > 0) {
+        configuredSenders = true
+        senderAccounts.value = list
+        senderAccountsLoaded = true
+        ensureConfiguredSender()
+        return senderAccounts.value
+      }
+    } catch (e) {
+      console.warn('读取发件地址配置失败，改用全部邮箱', e)
+    }
+
     const allAccounts = []
     let cursorAccountId = 0
     let cursorSort = 9999999999

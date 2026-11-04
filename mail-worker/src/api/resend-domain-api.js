@@ -171,3 +171,52 @@ app.post('/resendDomain/applyDns', guard(async (c, p) => {
 	try { await resend(c, 'POST', `/domains/${p.id}/verify`); } catch (e) {}
 	return { dns };
 }));
+
+// ===== 发件地址：写信时只显示这里配置的几个地址 =====
+const SENDERS_KEY = 'send_senders';
+
+async function readSenders(c) {
+	const list = await c.env.kv.get(SENDERS_KEY, { type: 'json' }).catch(() => null);
+	return Array.isArray(list) ? list : [];
+}
+
+async function senderRows(c, emails) {
+	if (!emails.length) return [];
+	const placeholders = emails.map(() => '?').join(',');
+	const { results } = await c.env.db.prepare(`
+		SELECT account_id AS accountId, email, name, sort
+		FROM account
+		WHERE is_del = 0 AND LOWER(email) IN (${placeholders})
+	`).bind(...emails).all();
+	const byEmail = new Map((results || []).map(r => [String(r.email).toLowerCase(), r]));
+	return emails.map(e => byEmail.get(e)).filter(Boolean);
+}
+
+// 写信框用：已配置时返回这几个地址，没配置返回空（前端按原方式列出全部邮箱）
+app.post('/sendSender/list', async (c) => {
+	const emails = await readSenders(c);
+	return json(c, { emails, list: await senderRows(c, emails) });
+});
+
+app.post('/sendSender/save', guard(async (c, p) => {
+	const raw = Array.isArray(p.emails) ? p.emails : String(p.emails || '').split(/[\s,;]+/);
+	const emails = [...new Set(raw.map(x => String(x).trim().toLowerCase()).filter(Boolean))];
+	if (emails.length > 20) throw new Error('发件地址最多 20 个');
+	let domainList = c.env.domain;
+	if (typeof domainList === 'string') { try { domainList = JSON.parse(domainList); } catch (e) { domainList = domainList.split(','); } }
+	const domains = (Array.isArray(domainList) ? domainList : []).map(d => String(d).replace(/^@/, '').toLowerCase());
+	const userId = c.get('user').userId;
+	for (const email of emails) {
+		const [local, dom] = email.split('@');
+		if (!local || !dom || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(local)) throw new Error('邮箱格式不对：' + email);
+		if (!domains.includes(dom)) throw new Error('不是系统里的域名：' + email);
+		const row = await c.env.db.prepare('SELECT account_id AS accountId, is_del AS isDel FROM account WHERE email COLLATE NOCASE = ?').bind(email).first();
+		if (!row) {
+			await c.env.db.prepare('INSERT INTO account (email, name, user_id) VALUES (?, ?, ?)').bind(email, local, userId).run();
+		} else if (row.isDel !== 0) {
+			await c.env.db.prepare('UPDATE account SET is_del = 0, user_id = ? WHERE account_id = ?').bind(userId, row.accountId).run();
+		}
+	}
+	await c.env.kv.put(SENDERS_KEY, JSON.stringify(emails));
+	return { emails, list: await senderRows(c, emails) };
+}));

@@ -683,6 +683,15 @@
               </template>
             </el-table-column>
           </el-table>
+          <div class="sd-senders">
+            <div class="sd-title">发件地址（写信时只显示这些）</div>
+            <el-input v-model="senderText" type="textarea" :rows="3"
+                      placeholder="每行一个，例如 support@ntmcn.com。没有的邮箱会自动创建；留空则显示全部邮箱"/>
+            <div class="sd-row" style="margin-top: 8px">
+              <el-button type="primary" :loading="sendLoading" @click="saveSenders">保存发件地址</el-button>
+              <span class="sd-hint" style="margin: 0; align-self: center">发件地址的域名需要在上面列表里「已验证」才能发到外部邮箱</span>
+            </div>
+          </div>
           <div v-if="sendRecords.name" class="sd-records">
             <div class="sd-title">{{ sendRecords.name }} 需要的 DNS 记录</div>
             <el-table :data="sendRecords.records" size="small">
@@ -876,7 +885,7 @@
 <script setup>
 import {computed, defineOptions, nextTick, reactive, ref} from "vue";
 import {deleteBackground, setBackground, setBlackList, settingQuery, settingSet} from "@/request/setting.js";
-import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey} from "@/request/resend-domain.js";
+import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey, sendSenderList, sendSenderSave} from "@/request/resend-domain.js";
 import {useSettingStore} from "@/store/setting.js";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
@@ -1631,10 +1640,31 @@ async function loadSendDomains() {
   }
 }
 
+const senderText = ref('')
+
+async function loadSenders() {
+  try {
+    const data = await sendSenderList()
+    senderText.value = (data.emails || []).join('\n')
+  } catch (e) {}
+}
+
+async function saveSenders() {
+  sendLoading.value = true
+  try {
+    const data = await sendSenderSave(senderText.value)
+    senderText.value = (data.emails || []).join('\n')
+    ElMessage({message: data.emails.length ? `已保存 ${data.emails.length} 个发件地址，刷新页面后写信生效` : '已清空，写信时显示全部邮箱', type: 'success', plain: true})
+  } catch (e) {} finally {
+    sendLoading.value = false
+  }
+}
+
 function openSendDomain() {
   sendDomainShow.value = true
   sendRecords.name = ''
   loadSendDomains()
+  loadSenders()
 }
 
 async function saveSendKey() {
@@ -2260,5 +2290,6 @@ form .el-button {
 .send-domain .sd-row { display: flex; gap: 8px; margin-bottom: 10px; }
 .send-domain .sd-hint { color: var(--el-text-color-secondary); font-size: 12px; margin: 0 0 10px; }
 .send-domain .sd-records { margin-top: 14px; }
+.send-domain .sd-senders { margin-top: 16px; }
 .send-domain .sd-title { font-weight: 600; margin-bottom: 6px; }
 </style>
