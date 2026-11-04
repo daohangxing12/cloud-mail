@@ -26,14 +26,3 @@ export async function cleanOldMail(env, maxRows = 3000) {
 	}
 	return result;
 }
-
-// 一次性：把旧同步工具写进备注的「邮箱:xx | TikTok:xx | 粉丝:0 | 播放:0」清掉，改成邮箱用户名
-export async function cleanSyncRemarks(env, force = false) {
-	const flag = 'cleanup_sync_remark_v1';
-	if (!force && await env.kv.get(flag)) return 0;
-	const r = await env.db.prepare(`
-		UPDATE account SET name = substr(email, 1, instr(email, '@') - 1)
-		WHERE name LIKE '%邮箱:%' OR name LIKE '%粉丝:%' OR name LIKE '%播放:%' OR name LIKE '%TikTok:%|%'`).run();
-	await env.kv.put(flag, '1');
-	return r?.meta?.changes || 0;
-}
