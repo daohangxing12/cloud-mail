@@ -24,18 +24,6 @@
         <el-tooltip content="清空筛选并刷新"><el-button circle @click="refresh"><Icon icon="ion:reload" width="15" height="15"/></el-button></el-tooltip>
       </div>
       <div class="ac-row">
-        <el-dropdown trigger="click" @command="runScan">
-          <el-button :loading="scanLoading || scanTikTokLoading">
-            <Icon icon="mdi:email-search-outline" width="16" height="16"/>
-            <span>从邮件识别</span>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="tiktok">识别 TikTok 用户名</el-dropdown-item>
-              <el-dropdown-item command="creator">识别中视频状态</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
         <el-button type="primary" :loading="exportLoading" @click="exportTxt">
           <Icon icon="ph:export" width="16" height="16"/>
           <span>导出{{ selectedRows.length ? `选中 (${selectedRows.length})` : '' }}</span>
@@ -204,7 +192,7 @@ import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {Icon} from '@iconify/vue'
 import {useSettingStore} from '@/store/setting.js'
-import {assetBatchStatus, assetExportTxt, assetList, assetScanCreatorRewards, assetScanTikTokInbox, assetUpdate} from '@/request/asset.js'
+import {assetBatchStatus, assetExportTxt, assetList, assetUpdate} from '@/request/asset.js'
 import {tzDayjs} from '@/utils/day.js'
 
 defineOptions({
@@ -218,8 +206,6 @@ const domainOptions = computed(() => (settingStore.domainList || []).map(cleanDo
 const rows = ref([])
 const total = ref(0)
 const loading = ref(false)
-const scanLoading = ref(false)
-const scanTikTokLoading = ref(false)
 const batchLoading = ref(false)
 const exportLoading = ref(false)
 const syncDialogShow = ref(false)
@@ -530,42 +516,6 @@ function saveRow(row, payload) {
   })
 }
 
-function scanCreatorRewards() {
-  if (scanLoading.value) return
-  scanLoading.value = true
-  assetScanCreatorRewards({
-    domain: params.domain || '',
-    limit: 3000
-  }).then(data => {
-    ElMessage({
-      message: `扫描完成：扫描 ${data.scanned || 0} 封，更新 ${data.updated || 0} 个，已加入 ${data.joined || 0}，被拒 ${data.rejected || 0}，已封 ${data.banned || 0}`,
-      type: 'success',
-      plain: true
-    })
-    getList(true)
-  }).finally(() => {
-    scanLoading.value = false
-  })
-}
-
-function scanTikTokInbox() {
-  if (scanTikTokLoading.value) return
-  scanTikTokLoading.value = true
-  assetScanTikTokInbox({
-    domain: params.domain || '',
-    limit: 10000
-  }).then(data => {
-    ElMessage({
-      message: `扫描完成：扫描 ${data.scanned || 0} 封，创建 ${data.created || 0} 个，更新 ${data.updated || 0} 个，冲突 ${data.conflict || 0} 个`,
-      type: 'success',
-      plain: true
-    })
-    getList(true)
-  }).finally(() => {
-    scanTikTokLoading.value = false
-  })
-}
-
 function openTikTok(row) {
   if (!row.tiktokUrl) return
   window.open(row.tiktokUrl, '_blank', 'noopener,noreferrer')
@@ -684,10 +634,6 @@ function loginText(value) {
   return '未同步'
 }
 
-function runScan(command) {
-  if (command === 'creator') scanCreatorRewards()
-  else scanTikTokInbox()
-}
 
 function creatorClass(value) {
   return {'已加入': 'is-ok', '被拒绝': 'is-bad', '已封': 'is-bad', '无权限': 'is-warn'}[value] || ''

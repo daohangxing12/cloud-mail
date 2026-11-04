@@ -38,8 +38,3 @@ app.get('/local-agent/account/list', async (c) => {
 	return c.json(result.ok(data));
 });
 
-app.post('/local-agent/tiktok/scanInbox', async (c) => {
-	await localAgentService.verifyAgent(c);
-	const data = await subAccountService.scanTikTokFromInbox(c, await c.req.json());
-	return c.json(result.ok(data));
-});

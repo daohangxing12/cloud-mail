@@ -16,14 +16,6 @@ export function assetBatchStatus(accountIds, action) {
     return http.put('/asset/batchStatus', {accountIds, action});
 }
 
-export function assetScanCreatorRewards(params) {
-    return http.post('/asset/creatorRewards/scanHistory', params);
-}
-
-export function assetScanTikTokInbox(params) {
-    return http.post('/asset/tiktok/scanInbox', params);
-}
-
 export function assetExportTxt(params) {
     return http.post('/asset/exportTxt', params)
 }

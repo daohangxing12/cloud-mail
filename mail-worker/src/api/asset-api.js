@@ -31,15 +31,7 @@ app.put('/asset/batchStatus', async (c) => {
 	return c.json(result.ok(data));
 });
 
-app.post('/asset/creatorRewards/scanHistory', async (c) => {
-	const data = await creatorRewardsService.scanHistory(c, await c.req.json());
-	return c.json(result.ok(data));
-});
 
-app.post('/asset/tiktok/scanInbox', async (c) => {
-	const data = await subAccountService.scanTikTokFromInbox(c, await c.req.json(), userContext.getUser(c));
-	return c.json(result.ok(data));
-});
 
 
 function firstEmail(...values) {
