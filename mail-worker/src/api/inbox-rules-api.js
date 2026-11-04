@@ -1,6 +1,6 @@
 import app from '../hono/hono';
 import settingService from '../service/setting-service';
-import { DEFAULT_INBOX_RULES, readInboxRules, saveInboxRules, isImportant } from '../utils/inbox-rules';
+import { DEFAULT_INBOX_RULES, readInboxRules, saveInboxRules, isImportant, inScope } from '../utils/inbox-rules';
 import { checkBlock } from '../email/email';
 
 const json = (c, data, code = 200, message = 'success') => c.json({ code, message, data });
@@ -35,7 +35,7 @@ app.post('/inboxRules/apply', guard(async (c, p) => {
 	let lastId = 0, scanned = 0;
 	while (true) {
 		const { results } = await c.env.db.prepare(`
-			SELECT email_id, subject, send_email, in_reply_to, is_spam, substr(text, 1, 6000) AS text, substr(content, 1, 20000) AS html
+			SELECT email_id, subject, to_email, send_email, in_reply_to, is_spam, substr(text, 1, 6000) AS text, substr(content, 1, 20000) AS html
 			FROM email WHERE type = 0 AND is_del = 0 AND email_id > ? AND create_time >= datetime('now', ?)
 			ORDER BY email_id LIMIT 500`).bind(lastId, `-${days} days`).all();
 		if (!results || !results.length) break;
@@ -44,6 +44,11 @@ app.post('/inboxRules/apply', guard(async (c, p) => {
 			scanned++;
 			const mail = { subject: r.subject || '', text: r.text || '', html: r.html || '', from: { address: r.send_email || '' } };
 			const blocked = checkBlock(blackSubject, blackContent, blackFrom, mail);
+			// 不在作用域名里的：只把被误放进垃圾邮箱的（非黑名单）移回收件箱
+			if (!inScope(rules, r.to_email)) {
+				if (!blocked && Number(r.is_spam) === 1) toInbox.push(r.email_id);
+				continue;
+			}
 			const important = !blocked && isImportant(rules, { ...mail, from: r.send_email, inReplyTo: r.in_reply_to });
 			if (!important && Number(r.is_spam) === 0) toSpam.push(r.email_id);
 			if (important && Number(r.is_spam) === 1) toInbox.push(r.email_id);

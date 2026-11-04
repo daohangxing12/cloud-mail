@@ -13,7 +13,7 @@ import telegramService from '../service/telegram-service';
 import aiService from '../service/ai-service';
 import subAccountService from '../service/sub-account-service';
 import creatorRewardsService from '../service/creator-rewards-service';
-import { readInboxRules, isImportant } from '../utils/inbox-rules';
+import { readInboxRules, isImportant, inScope } from '../utils/inbox-rules';
 
 export async function email(message, env, ctx) {
 
@@ -57,7 +57,7 @@ export async function email(message, env, ctx) {
 
 		// 白名单：没命中重要规则的一律进垃圾邮箱（不影响 TikTok 资料识别和接码）
 		const inboxRules = await readInboxRules(env);
-		const notImportant = !blockFlag && inboxRules.enabled && !isImportant(inboxRules, {
+		const notImportant = !blockFlag && inboxRules.enabled && inScope(inboxRules, message.to) && !isImportant(inboxRules, {
 			subject: email.subject, text: email.text, html: email.html, from: email.from?.address, inReplyTo: email.inReplyTo
 		});
 

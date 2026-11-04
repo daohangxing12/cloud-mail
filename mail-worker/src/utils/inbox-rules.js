@@ -5,6 +5,8 @@ export const INBOX_RULES_KEY = 'inbox_rules';
 
 export const DEFAULT_INBOX_RULES = {
 	enabled: true,
+	// 只对这些收件域名生效（做 TikTok 业务的）；其他域名不过滤，照常进收件箱
+	domains: ['ntmcn.com', 'baofa.de', 'feilong168.com'],
 	subject: [
 		// 01 验证码
 		'is your 6-digit code', 'is your 6 digit code', 'verification code', 'security code', 'one-time code', 'one time code', '验证码', '驗證碼', '認証コード',
@@ -20,7 +22,8 @@ export const DEFAULT_INBOX_RULES = {
 		'账号被封禁', '帳號被封鎖', '取消资格', '取消資格', '申诉结果', '申訴結果'
 	],
 	body: ['Your 6-digit code is:', 'Your verification code is:', '你的验证码是', '您的验证码是', '你的驗證碼是'],
-	from: ['ntmcn.com', 'flyvg.com', 'flygw.com'],
+	// 这些发件方永远进收件箱（含子域名，如 email.apple.com）
+	from: ['ntmcn.com', 'flyvg.com', 'flygw.com', 'paypal.com', 'apple.com', 'icloud.com'],
 	replyToInbox: true
 };
 
@@ -32,6 +35,7 @@ export function normalizeRules(r) {
 	r = r || {};
 	return {
 		enabled: r.enabled !== false,
+		domains: cleanList(r.domains ?? DEFAULT_INBOX_RULES.domains).map(s => s.toLowerCase().replace(/^@/, '')),
 		subject: cleanList(r.subject ?? DEFAULT_INBOX_RULES.subject),
 		body: cleanList(r.body ?? DEFAULT_INBOX_RULES.body),
 		from: cleanList(r.from ?? DEFAULT_INBOX_RULES.from).map(s => s.toLowerCase()),
@@ -55,6 +59,13 @@ export async function saveInboxRules(env, rules) {
 }
 
 // 是否是重要邮件（应进收件箱）。mail: { subject, text, html, from, inReplyTo }
+// 收件地址是否在规则作用范围内（domains 为空 = 所有域名）
+export function inScope(rules, to) {
+	if (!rules.domains.length) return true;
+	const d = String(to || '').toLowerCase().split('@')[1] || '';
+	return rules.domains.some(k => d === k || d.endsWith('.' + k));
+}
+
 export function isImportant(rules, mail) {
 	const subject = String(mail.subject || '').toLowerCase();
 	if (rules.subject.some(k => subject.includes(k.toLowerCase()))) return true;

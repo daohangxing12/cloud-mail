@@ -647,13 +647,16 @@
           </div>
           <p class="sd-hint">命中下面任意一条就进收件箱（不分大小写，一行一个）。点赞、关注、转发、营销等通知全部进垃圾邮箱，不推送 TG、不转发。接码链接照常能取到垃圾邮箱里的验证码，TikTok 资料识别也不受影响。</p>
           <el-form label-position="top">
+            <el-form-item label="只对这些收件域名生效（做 TikTok 业务的；留空 = 所有域名）。不在列表里的域名不过滤，照常进收件箱">
+              <el-input v-model="inboxRules.domainsText" type="textarea" :rows="3"/>
+            </el-form-item>
             <el-form-item label="主题包含">
               <el-input v-model="inboxRules.subjectText" type="textarea" :rows="8"/>
             </el-form-item>
             <el-form-item label="正文包含">
               <el-input v-model="inboxRules.bodyText" type="textarea" :rows="3"/>
             </el-form-item>
-            <el-form-item label="发件人域名或邮箱（自家域名来信）">
+            <el-form-item label="这些发件方永远进收件箱（域名或邮箱，含子域名，如 paypal.com、apple.com）">
               <el-input v-model="inboxRules.fromText" type="textarea" :rows="2"/>
             </el-form-item>
             <el-checkbox v-model="inboxRules.replyToInbox">别人回复我的邮件进收件箱</el-checkbox>
@@ -1789,11 +1792,12 @@ async function applySendDns(row) {
 const inboxRulesShow = ref(false)
 const inboxRulesLoading = ref(false)
 const inboxApplyLoading = ref(false)
-const inboxRules = reactive({enabled: true, subjectText: '', bodyText: '', fromText: '', replyToInbox: true})
+const inboxRules = reactive({enabled: true, domainsText: '', subjectText: '', bodyText: '', fromText: '', replyToInbox: true})
 let inboxDefaults = null
 
 function fillInboxRules(r) {
   inboxRules.enabled = r.enabled !== false
+  inboxRules.domainsText = (r.domains || []).join('\n')
   inboxRules.subjectText = (r.subject || []).join('\n')
   inboxRules.bodyText = (r.body || []).join('\n')
   inboxRules.fromText = (r.from || []).join('\n')
@@ -1820,7 +1824,7 @@ async function saveInboxRules() {
   inboxRulesLoading.value = true
   try {
     const split = (t) => t.split('\n').map(s => s.trim()).filter(Boolean)
-    const data = await inboxRulesSave({enabled: inboxRules.enabled, subject: split(inboxRules.subjectText), body: split(inboxRules.bodyText), from: split(inboxRules.fromText), replyToInbox: inboxRules.replyToInbox})
+    const data = await inboxRulesSave({enabled: inboxRules.enabled, domains: split(inboxRules.domainsText), subject: split(inboxRules.subjectText), body: split(inboxRules.bodyText), from: split(inboxRules.fromText), replyToInbox: inboxRules.replyToInbox})
     fillInboxRules(data.rules)
     ElMessage({message: '已保存，新邮件立即按此规则分类', type: 'success', plain: true})
   } catch (e) {} finally {
