@@ -38,7 +38,7 @@ ai_model = ""
 analysis_cache = false
 orm_log = false
 domain = ["orz.gay", "212202.xyz", "feilong168.com", "baofa.de", "ntmcn.com"]
-admin = "admin@orz.gay"
+admin = "admin@ntmcn.com"
 
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"

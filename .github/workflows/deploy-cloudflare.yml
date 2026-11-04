@@ -49,7 +49,8 @@ jobs:
       CUSTOM_DOMAIN: 212202.xyz
       # 收信域名（第一个是默认后缀）。orz.gay 已停用，2026-11-04 移除
       DOMAIN: '["ntmcn.com","baofa.de","feilong168.com","212202.xyz"]'
-      ADMIN: ${{ (github.event_name == 'workflow_dispatch' && contains(inputs.maintenance, 'admin')) && 'admin@ntmcn.com' || secrets.ADMIN || vars.ADMIN }}
+      # 管理员邮箱（登录时填 admin 即可）。2026-11-04 由 admin@orz.gay 改为 admin@ntmcn.com
+      ADMIN: 'admin@ntmcn.com'
       JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
