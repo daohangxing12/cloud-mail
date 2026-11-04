@@ -1,6 +1,6 @@
 import app from '../hono/hono';
 import settingService from '../service/setting-service';
-import { DEFAULT_INBOX_RULES, readInboxRules, saveInboxRules, isImportant, inScope } from '../utils/inbox-rules';
+import { DEFAULT_INBOX_RULES, readInboxRules, saveInboxRules, classify, FOLDER } from '../utils/inbox-rules';
 import { checkBlock } from '../email/email';
 import { cleanOldMail } from '../utils/mail-cleanup';
 
@@ -26,13 +26,12 @@ app.post('/inboxRules/get', guard(async (c) => ({ rules: await readInboxRules(c.
 
 app.post('/inboxRules/save', guard(async (c, p) => ({ rules: await saveInboxRules(c.env, p.rules || p) })));
 
-// 按当前规则重新整理最近 N 天收到的邮件：不重要的移到垃圾邮箱，重要的（且不在黑名单）移回收件箱
+// 按当前规则重新整理最近 N 天收到的邮件，分到 收件箱 / 垃圾邮件 / 其他通知
 app.post('/inboxRules/apply', guard(async (c, p) => {
 	const days = Math.min(Math.max(Number(p.days) || 30, 1), 365);
 	const rules = await readInboxRules(c.env, true);
-	if (!rules.enabled) throw new Error('规则未开启');
 	const { blackSubject, blackContent, blackFrom } = await settingService.query({ env: c.env });
-	const toSpam = [], toInbox = [];
+	const move = { 0: [], 1: [], 2: [] };
 	let lastId = 0, scanned = 0;
 	while (true) {
 		const { results } = await c.env.db.prepare(`
@@ -44,27 +43,21 @@ app.post('/inboxRules/apply', guard(async (c, p) => {
 			lastId = r.email_id;
 			scanned++;
 			const mail = { subject: r.subject || '', text: r.text || '', html: r.html || '', from: { address: r.send_email || '' } };
-			const blocked = checkBlock(blackSubject, blackContent, blackFrom, mail);
-			// 不在作用域名里的：只把被误放进垃圾邮箱的（非黑名单）移回收件箱
-			if (!inScope(rules, r.to_email)) {
-				if (!blocked && Number(r.is_spam) === 1) toInbox.push(r.email_id);
-				continue;
-			}
-			const important = !blocked && isImportant(rules, { ...mail, from: r.send_email, inReplyTo: r.in_reply_to });
-			if (!important && Number(r.is_spam) === 0) toSpam.push(r.email_id);
-			if (important && Number(r.is_spam) === 1) toInbox.push(r.email_id);
+			const folder = checkBlock(blackSubject, blackContent, blackFrom, mail)
+				? FOLDER.SPAM
+				: classify(rules, { ...mail, from: r.send_email, inReplyTo: r.in_reply_to }, r.to_email);
+			if (Number(r.is_spam) !== folder) move[folder].push(r.email_id);
 		}
 		if (results.length < 500) break;
 	}
-	const update = async (ids, val) => {
+	for (const folder of [0, 1, 2]) {
+		const ids = move[folder];
 		for (let i = 0; i < ids.length; i += 90) {
 			const part = ids.slice(i, i + 90);
-			await c.env.db.prepare(`UPDATE email SET is_spam = ? WHERE email_id IN (${part.map(() => '?').join(',')})`).bind(val, ...part).run();
+			await c.env.db.prepare(`UPDATE email SET is_spam = ? WHERE email_id IN (${part.map(() => '?').join(',')})`).bind(folder, ...part).run();
 		}
-	};
-	await update(toSpam, 1);
-	await update(toInbox, 0);
-	return { days, scanned, movedToSpam: toSpam.length, movedToInbox: toInbox.length };
+	}
+	return { days, scanned, toInbox: move[0].length, toSpam: move[1].length, toOther: move[2].length };
 }));
 
 app.post('/inboxRules/clean', guard(async (c) => await cleanOldMail(c.env, 5000)));

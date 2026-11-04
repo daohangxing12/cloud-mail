@@ -30,7 +30,7 @@
               <el-button size="small" type="primary" @click="openMailDomain">管理</el-button>
             </div>
             <div class="ss-row">
-              <div class="ss-text"><b>收件箱规则</b><span>哪些邮件进收件箱，其余进垃圾邮箱（只管 TikTok 业务域名）</span></div>
+              <div class="ss-text"><b>收信分类规则</b><span>重要→收件箱，推广→垃圾邮件，其余→其他通知（只管 TikTok 业务域名）</span></div>
               <el-button size="small" type="primary" @click="openInboxRules">设置</el-button>
             </div>
             <div class="ss-row">
@@ -335,26 +335,28 @@
         </form>
       </el-dialog>
 
-      <el-dialog v-model="inboxRulesShow" title="收件箱规则" width="720">
+      <el-dialog v-model="inboxRulesShow" title="收信分类规则" width="720">
         <div class="send-domain" v-loading="inboxRulesLoading">
           <div class="sd-row">
-            <el-switch v-model="inboxRules.enabled" active-text="只让重要邮件进收件箱，其余进垃圾邮箱"/>
+            <el-switch v-model="inboxRules.enabled" active-text="开启收信分类（和原 VPS 邮局同一套规则）"/>
           </div>
-          <p class="sd-hint">命中下面任意一条就进收件箱（不分大小写，一行一个）。点赞、关注、转发、营销等通知全部进垃圾邮箱，不推送 TG、不转发。接码链接照常能取到垃圾邮箱里的验证码，TikTok 资料识别也不受影响。</p>
+          <p class="sd-hint">按顺序判断：① 主题/正文命中「重要」→ 收件箱；② 主题命中「推广」→ 垃圾邮件；③ 其余（点赞、关注、发视频等通知）→ 其他通知。不分大小写，一行一个。接码链接三个文件夹都能取到验证码。看到漏判的，把完整标题加到「重要」里。</p>
           <el-form label-position="top">
             <el-form-item label="只对这些收件域名生效（做 TikTok 业务的；留空 = 所有域名）。不在列表里的域名不过滤，照常进收件箱">
               <el-input v-model="inboxRules.domainsText" type="textarea" :rows="3"/>
             </el-form-item>
-            <el-form-item label="主题包含">
+            <el-form-item label="① 重要：主题包含（→ 收件箱）">
               <el-input v-model="inboxRules.subjectText" type="textarea" :rows="8"/>
             </el-form-item>
-            <el-form-item label="正文包含">
+            <el-form-item label="① 重要：正文包含（→ 收件箱）">
               <el-input v-model="inboxRules.bodyText" type="textarea" :rows="3"/>
+            </el-form-item>
+            <el-form-item label="② 推广：主题包含（→ 垃圾邮件）">
+              <el-input v-model="inboxRules.marketingText" type="textarea" :rows="4"/>
             </el-form-item>
             <el-form-item label="这些发件方永远进收件箱（域名或邮箱，含子域名，如 paypal.com、apple.com）">
               <el-input v-model="inboxRules.fromText" type="textarea" :rows="2"/>
             </el-form-item>
-            <el-checkbox v-model="inboxRules.replyToInbox">别人回复我的邮件进收件箱</el-checkbox>
             <div class="ss-title" style="margin-top: 14px">自动清理旧邮件（所有域名，星标邮件永远不删）</div>
             <div class="sd-row" style="gap: 10px; flex-wrap: wrap">
               <span>垃圾邮箱超过</span>
@@ -1520,7 +1522,7 @@ async function savePwd() {
 const inboxRulesShow = ref(false)
 const inboxRulesLoading = ref(false)
 const inboxApplyLoading = ref(false)
-const inboxRules = reactive({enabled: true, cleanSpamDays: 15, cleanInboxDays: 0, domainsText: '', subjectText: '', bodyText: '', fromText: '', replyToInbox: true})
+const inboxRules = reactive({enabled: true, marketingText: '', cleanSpamDays: 15, cleanInboxDays: 0, domainsText: '', subjectText: '', bodyText: '', fromText: '', replyToInbox: true})
 let inboxDefaults = null
 
 function fillInboxRules(r) {
@@ -1530,6 +1532,7 @@ function fillInboxRules(r) {
   inboxRules.cleanInboxDays = Number(r.cleanInboxDays || 0)
   inboxRules.subjectText = (r.subject || []).join('\n')
   inboxRules.bodyText = (r.body || []).join('\n')
+  inboxRules.marketingText = (r.marketing || []).join('\n')
   inboxRules.fromText = (r.from || []).join('\n')
   inboxRules.replyToInbox = r.replyToInbox !== false
 }
@@ -1554,7 +1557,7 @@ async function saveInboxRules() {
   inboxRulesLoading.value = true
   try {
     const split = (t) => t.split('\n').map(s => s.trim()).filter(Boolean)
-    const data = await inboxRulesSave({enabled: inboxRules.enabled, domains: split(inboxRules.domainsText), cleanSpamDays: inboxRules.cleanSpamDays, cleanInboxDays: inboxRules.cleanInboxDays, subject: split(inboxRules.subjectText), body: split(inboxRules.bodyText), from: split(inboxRules.fromText), replyToInbox: inboxRules.replyToInbox})
+    const data = await inboxRulesSave({enabled: inboxRules.enabled, domains: split(inboxRules.domainsText), cleanSpamDays: inboxRules.cleanSpamDays, cleanInboxDays: inboxRules.cleanInboxDays, subject: split(inboxRules.subjectText), body: split(inboxRules.bodyText), marketing: split(inboxRules.marketingText), from: split(inboxRules.fromText), replyToInbox: false})
     fillInboxRules(data.rules)
     ElMessage({message: '已保存，新邮件立即按此规则分类', type: 'success', plain: true})
   } catch (e) {} finally {
@@ -1589,7 +1592,7 @@ async function applyInboxRules() {
   inboxApplyLoading.value = true
   try {
     const data = await inboxRulesApply(30)
-    ElMessage({message: `检查了 ${data.scanned} 封：${data.movedToSpam} 封移到垃圾邮箱，${data.movedToInbox} 封移回收件箱`, type: 'success', plain: true})
+    ElMessage({message: `检查了 ${data.scanned} 封：收件箱 +${data.toInbox}，其他通知 +${data.toOther}，垃圾邮件 +${data.toSpam}`, type: 'success', plain: true})
   } catch (e) {} finally {
     inboxApplyLoading.value = false
   }

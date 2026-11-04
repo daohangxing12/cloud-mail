@@ -13,7 +13,7 @@ import telegramService from '../service/telegram-service';
 import aiService from '../service/ai-service';
 import subAccountService from '../service/sub-account-service';
 import creatorRewardsService from '../service/creator-rewards-service';
-import { readInboxRules, isImportant, inScope } from '../utils/inbox-rules';
+import { readInboxRules, classify, FOLDER } from '../utils/inbox-rules';
 
 export async function email(message, env, ctx) {
 
@@ -55,11 +55,11 @@ export async function email(message, env, ctx) {
 
 		const blockFlag = checkBlock(blackSubject, blackContent, blackFrom, email);
 
-		// 白名单：没命中重要规则的一律进垃圾邮箱（不影响 TikTok 资料识别和接码）
+		// 收信分类（照搬 VPS 规则）：黑名单 → 垃圾邮件；否则按规则分到 收件箱 / 垃圾邮件 / 其他通知
 		const inboxRules = await readInboxRules(env);
-		const notImportant = !blockFlag && inboxRules.enabled && inScope(inboxRules, message.to) && !isImportant(inboxRules, {
+		const folder = blockFlag ? FOLDER.SPAM : classify(inboxRules, {
 			subject: email.subject, text: email.text, html: email.html, from: email.from?.address, inReplyTo: email.inReplyTo
-		});
+		}, message.to);
 
 		let account = await accountService.selectByEmailIncludeDel({ env: env }, message.to);
 		let catchAllReceive = false;
@@ -125,7 +125,7 @@ export async function email(message, env, ctx) {
 			messageId: email.messageId,
 			userId: account ? account.userId : 0,
 			accountId: account ? account.accountId : 0,
-			isSpam: (blockFlag || notImportant) ? emailConst.spam.SPAM : emailConst.spam.NORMAL,
+			isSpam: folder,
 			isDel: isDel.DELETE,
 			status: emailConst.status.SAVING
 		};
@@ -167,8 +167,8 @@ export async function email(message, env, ctx) {
 		await creatorRewardsService.updateFromIncomingEmail({ env }, message.to, email, emailRow);
 
 
-		// 非重要邮件不推送 TG / 不转发
-		if (notImportant) {
+		// 只有进收件箱的才推送 TG / 转发
+		if (folder !== FOLDER.INBOX) {
 			return;
 		}
 

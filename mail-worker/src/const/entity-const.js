@@ -57,7 +57,8 @@ export const emailConst = {
 	},
 	spam: {
 		NORMAL: 0,
-		SPAM: 1
+		SPAM: 1,
+		OTHER: 2
 	}
 }
 

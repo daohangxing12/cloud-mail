@@ -36,7 +36,7 @@ const emailService = {
 		accountId = Number(accountId);
 		type = Number(type);
 		domain = this.normalizeDomain(domain);
-		spam = Number(spam) === emailConst.spam.SPAM ? emailConst.spam.SPAM : emailConst.spam.NORMAL;
+		spam = [emailConst.spam.SPAM, emailConst.spam.OTHER].includes(Number(spam)) ? Number(spam) : emailConst.spam.NORMAL;
 		allReceive = await this.resolveAllReceive(c, userId, accountId, allReceive);
 		keyword = this.normalizeKeyword(keyword);
 
@@ -189,6 +189,18 @@ const emailService = {
 				eq(email.userId, userId),
 				inArray(email.emailId, emailIdList)))
 			.run();
+	},
+
+	// 移动到 收件箱(0) / 垃圾邮件(1) / 其他通知(2)
+	async moveFolder(c, params, user) {
+		const folder = Number(params.folder);
+		if (![0, 1, 2].includes(folder)) throw new BizError('folder invalid');
+		const ids = String(params.emailIds || '').split(',').map(Number).filter(Boolean).slice(0, 500);
+		if (!ids.length) throw new BizError('emailIds required');
+		const admin = this.isAdmin(c, user);
+		const r = await c.env.db.prepare(`UPDATE email SET is_spam = ? WHERE email_id IN (${ids.map(() => '?').join(',')})${admin ? '' : ' AND user_id = ?'}`)
+			.bind(folder, ...ids, ...(admin ? [] : [user.userId])).run();
+		return { moved: Number(r.meta?.changes || 0) };
 	},
 
 	async blockSender(c, params, user) {
@@ -795,7 +807,7 @@ const emailService = {
 		emailId = Number(emailId);
 		accountId = Number(accountId);
 		domain = this.normalizeDomain(domain);
-		spam = Number(spam) === emailConst.spam.SPAM ? emailConst.spam.SPAM : emailConst.spam.NORMAL;
+		spam = [emailConst.spam.SPAM, emailConst.spam.OTHER].includes(Number(spam)) ? Number(spam) : emailConst.spam.NORMAL;
 		allReceive = await this.resolveAllReceive(c, userId, accountId, allReceive);
 
 		const conditions = [
@@ -832,6 +844,7 @@ const emailService = {
 			return {
 				globalInboxUnread: 0,
 				spamUnread: 0,
+				otherUnread: 0,
 				domains: []
 			};
 		}
@@ -865,7 +878,7 @@ const emailService = {
 			return Number(row?.unreadCount || 0);
 		};
 
-		const [{ results }, globalInboxUnread, spamUnread] = await Promise.all([
+		const [{ results }, globalInboxUnread, spamUnread, otherUnread] = await Promise.all([
 			c.env.db.prepare(`
 			SELECT LOWER(SUBSTR(to_email, INSTR(to_email, '@') + 1)) AS domain,
 				COUNT(*) AS unreadCount
@@ -883,13 +896,15 @@ const emailService = {
 				emailConst.spam.NORMAL
 			).all(),
 			countUnread(emailConst.spam.NORMAL),
-			countUnread(emailConst.spam.SPAM)
+			countUnread(emailConst.spam.SPAM),
+			countUnread(emailConst.spam.OTHER)
 		]);
 
 		const unreadMap = Object.fromEntries((results || []).map(row => [row.domain, Number(row.unreadCount || 0)]));
 		return {
 			globalInboxUnread,
 			spamUnread,
+			otherUnread,
 			domains: domains.map(domain => ({
 				domain,
 				unreadCount: unreadMap[domain] || 0

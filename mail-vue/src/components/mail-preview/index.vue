@@ -17,6 +17,16 @@
             :loading="blockLoading"
             @click="handleBlockSender"
         >拉黑发件人</el-button>
+        <el-dropdown v-if="currentEmail.type !== 1" trigger="click" @command="handleMove">
+          <el-button size="small" plain>移动到</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item :command="0" :disabled="Number(currentEmail.isSpam || 0) === 0">收件箱</el-dropdown-item>
+              <el-dropdown-item :command="2" :disabled="Number(currentEmail.isSpam || 0) === 2">其他通知</el-dropdown-item>
+              <el-dropdown-item :command="1" :disabled="Number(currentEmail.isSpam || 0) === 1">垃圾邮件</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <Icon class="icon" v-if="showReply" v-perm="'email:send'" @click="openReply" icon="la:reply" width="21" height="21" />
         <Icon class="icon" v-if="showReply" v-perm="'email:send'" @click="openForward" icon="iconoir:arrow-up-right" width="20" height="20" />
       </div>
@@ -87,7 +97,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ShadowHtml from '@/components/shadow-html/index.vue'
-import { emailBlockSender, emailDelete, emailRead } from '@/request/email.js'
+import { emailBlockSender, emailDelete, emailMoveFolder, emailRead } from '@/request/email.js'
 import { allEmailDelete } from '@/request/all-email.js'
 import { starAdd, starCancel } from '@/request/star.js'
 import { useEmailStore } from '@/store/email.js'
@@ -236,6 +246,19 @@ function handleDelete() {
       emailStore.deleteIds = [email.emailId]
       emit('deleted', email)
     })
+  })
+}
+
+function handleMove(folder) {
+  const email = currentEmail.value
+  emailMoveFolder(email.emailId, folder).then(() => {
+    ElMessage({message: `已移到${['收件箱', '垃圾邮件', '其他通知'][folder]}`, type: 'success', plain: true})
+    email.isSpam = folder
+    emailStore.deleteIds = [email.emailId]
+    emailStore.emailScroll?.refreshList?.()
+    emailStore.spamScroll?.refreshList?.()
+    emailStore.otherScroll?.refreshList?.()
+    emit('deleted', email)
   })
 }
 

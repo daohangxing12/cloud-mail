@@ -32,3 +32,7 @@ export function emailSend(form,progress) {
         noMsg: true
     })
 }
+
+export function emailMoveFolder(emailIds, folder) {
+    return http.post('/email/moveFolder', {emailIds: String(emailIds), folder})
+}

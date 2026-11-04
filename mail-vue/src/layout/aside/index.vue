@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <el-scrollbar class="scroll">
     <div>
       <div class="title">
@@ -51,6 +51,12 @@
           <Icon icon="mdi:email-alert-outline" width="21" height="21" />
           <span class="menu-name" style="margin-left: 20px">&#x5783;&#x573e;&#x90ae;&#x7bb1;</span>
           <span v-if="spamUnread > 0" class="domain-badge">{{ formatUnread(spamUnread) }}</span>
+        </el-menu-item>
+        <el-menu-item @click="openOther" index="other"
+                      :class="route.meta.name === 'other' ? 'choose-item' : ''">
+          <Icon icon="mdi:bell-outline" width="20" height="20" />
+          <span class="menu-name" style="margin-left: 20px">其他通知</span>
+          <span v-if="otherUnread > 0" class="domain-badge">{{ formatUnread(otherUnread) }}</span>
         </el-menu-item>
         <el-menu-item @click="openWriter" index="write" v-perm="'email:send'">
           <Icon icon="material-symbols:edit-outline-sharp" width="20" height="20" />
@@ -140,6 +146,7 @@ const route = useRoute()
 const domainStats = ref({})
 const globalInboxUnread = ref(0)
 const spamUnread = ref(0)
+const otherUnread = ref(0)
 
 const domainAccounts = computed(() => (settingStore.domainList || []).map(domain => {
   const clean = cleanDomain(domain)
@@ -195,6 +202,11 @@ function openSpam() {
   router.push({name: 'spam'})
 }
 
+function openOther() {
+  setGlobalMailbox(true, '其他通知')
+  router.push({name: 'other'})
+}
+
 function openWriter() {
   uiStore.writerRef?.open?.()
 }
@@ -236,6 +248,7 @@ function setGlobalMailbox(refreshList = true, label = '\u603b\u6536\u4ef6\u7bb1'
   if (refreshList && changed) {
     emailStore.emailScroll?.refreshList?.()
     emailStore.spamScroll?.refreshList?.()
+    emailStore.otherScroll?.refreshList?.()
   }
 }
 
@@ -257,6 +270,7 @@ function changeDomain(item, refreshList = true) {
   if (refreshList && changed) {
     emailStore.emailScroll?.refreshList?.()
     emailStore.spamScroll?.refreshList?.()
+    emailStore.otherScroll?.refreshList?.()
     emailStore.sendScroll?.refreshList?.()
   }
 }
@@ -268,6 +282,7 @@ function fetchDomainStats() {
     const fallbackGlobalUnread = list.reduce((total, item) => total + Number(item.unreadCount || 0), 0)
     globalInboxUnread.value = Number(data?.globalInboxUnread ?? fallbackGlobalUnread)
     spamUnread.value = Number(data?.spamUnread || 0)
+    otherUnread.value = Number(data?.otherUnread || 0)
     domainStats.value = Object.fromEntries((list || []).map(item => [
       cleanDomain(item.domain),
       Number(item.unreadCount || 0)

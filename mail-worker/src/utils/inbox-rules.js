@@ -1,7 +1,8 @@
-// 收件箱白名单规则（对齐原 VPS 邮局的 sieve 规则）：
-// 只有「重要邮件」进收件箱（验证码、开通/审核、登录/密码、申诉封禁、回复、自家域名来信），
-// 其余（点赞/关注/转发等通知、营销）全部进垃圾邮箱。接码链接照常能取到垃圾邮箱里的验证码。
-export const INBOX_RULES_KEY = 'inbox_rules';
+// 收信分类规则：照搬原 VPS 邮局（Stalwart sieve「代收分类」）的 7 条，按顺序命中即停：
+// 01-05 重要消息 → 收件箱；06 推广邮件 → 垃圾邮件；07 其余未识别 → 其他通知。
+// 另外：自家域名 / PayPal / Apple 来信 → 收件箱；只对 TikTok 业务域名生效，其他域名照常进收件箱。
+// 接码链接不看文件夹，三个文件夹里的验证码都能取到。
+export const INBOX_RULES_KEY = 'inbox_rules_v2';
 
 export const DEFAULT_INBOX_RULES = {
 	enabled: true,
@@ -22,9 +23,13 @@ export const DEFAULT_INBOX_RULES = {
 		'账号被封禁', '帳號被封鎖', '取消资格', '取消資格', '申诉结果', '申訴結果'
 	],
 	body: ['Your 6-digit code is:', 'Your verification code is:', '你的验证码是', '您的验证码是', '你的驗證碼是'],
+	// 06 推广邮件（已确认的营销主题）→ 垃圾邮件
+	marketing: ['Inspire the Art of Selling', 'Post Shoppable Content to Start Earn', 'Keep Posting. Keep Going. Success', 'Your First TikTok Shop Products Are',
+		'Start Posting With Products You Own', 'Debunking the Myth:', 'Still no sale? Try this', 'Review Your Content & More Ways', 'ACE your LIVE with Follower Growth',
+		'Biggest sale of this summer?', 'in rewards waiting'],
 	// 这些发件方永远进收件箱（含子域名，如 email.apple.com）
 	from: ['ntmcn.com', 'flyvg.com', 'flygw.com', 'paypal.com', 'apple.com', 'icloud.com'],
-	replyToInbox: true,
+	replyToInbox: false,
 	// 自动清理：超过 N 天的邮件彻底删除（0 = 不清理）。加了星标的永远不删
 	cleanSpamDays: 15,
 	cleanInboxDays: 0
@@ -43,8 +48,9 @@ export function normalizeRules(r) {
 		domains: cleanList(r.domains ?? DEFAULT_INBOX_RULES.domains).map(s => s.toLowerCase().replace(/^@/, '')),
 		subject: cleanList(r.subject ?? DEFAULT_INBOX_RULES.subject),
 		body: cleanList(r.body ?? DEFAULT_INBOX_RULES.body),
+		marketing: cleanList(r.marketing ?? DEFAULT_INBOX_RULES.marketing),
 		from: cleanList(r.from ?? DEFAULT_INBOX_RULES.from).map(s => s.toLowerCase()),
-		replyToInbox: r.replyToInbox !== false,
+		replyToInbox: r.replyToInbox === true,
 		cleanSpamDays: days(r.cleanSpamDays ?? DEFAULT_INBOX_RULES.cleanSpamDays),
 		cleanInboxDays: days(r.cleanInboxDays ?? DEFAULT_INBOX_RULES.cleanInboxDays)
 	};
@@ -83,4 +89,15 @@ export function isImportant(rules, mail) {
 	if (rules.from.some(k => from === k || fromDomain === k || fromDomain.endsWith('.' + k))) return true;
 	if (rules.replyToInbox && mail.inReplyTo) return true;
 	return false;
+}
+
+export const FOLDER = { INBOX: 0, SPAM: 1, OTHER: 2 };
+
+// 返回该邮件该进的文件夹：0 收件箱 / 1 垃圾邮件 / 2 其他通知
+export function classify(rules, mail, to) {
+	if (!rules.enabled || !inScope(rules, to)) return FOLDER.INBOX;
+	if (isImportant(rules, mail)) return FOLDER.INBOX;
+	const subject = String(mail.subject || '').toLowerCase();
+	if (rules.marketing.some(k => subject.includes(k.toLowerCase()))) return FOLDER.SPAM;
+	return FOLDER.OTHER;
 }

@@ -32,6 +32,16 @@ const routes = [
                 }
             },
             {
+                path: '/other',
+                name: 'other',
+                component: () => import('@/views/other/index.vue'),
+                meta: {
+                    title: '其他通知',
+                    name: 'other',
+                    menu: true
+                }
+            },
+            {
                 path: '/message',
                 name: 'content',
                 component: () => import('@/views/content/index.vue'),

@@ -24,6 +24,11 @@ app.delete('/email/delete', async (c) => {
 	return c.json(result.ok());
 });
 
+app.post('/email/moveFolder', async (c) => {
+	const data = await emailService.moveFolder(c, await c.req.json(), userContext.getUser(c));
+	return c.json(result.ok(data));
+});
+
 app.post('/email/blockSender', async (c) => {
 	const data = await emailService.blockSender(c, await c.req.json(), userContext.getUser(c));
 	return c.json(result.ok(data));
