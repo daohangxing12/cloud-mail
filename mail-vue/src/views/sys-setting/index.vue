@@ -671,8 +671,10 @@
 
       <el-dialog v-model="mailDomainShow" title="收信域名" width="720">
         <div class="send-domain">
-          <el-alert v-if="!mailDomainInfo.hasToken" type="warning" :closable="false"
-                    title="还没有配置 CF_MAIL_TOKEN：请在 Cloudflare 的 cloud-mail Worker → 设置 → 变量和密钥 里添加一个名为 CF_MAIL_TOKEN 的密钥后，才能一键解析。"/>
+          <div class="sd-row">
+            <el-input v-model="mailTokenInput" type="password" show-password :placeholder="mailDomainInfo.hasToken ? 'Cloudflare 令牌已保存（要换就粘贴新的）' : '粘贴 Cloudflare API 令牌（Zone 读取、DNS 编辑、Email Routing 规则编辑、Zone 设置编辑）'"/>
+            <el-button type="primary" :loading="mailTokenLoading" @click="saveMailToken">保存令牌</el-button>
+          </div>
           <div class="sd-row" style="margin-top: 10px">
             <el-input v-model="mailDomainInput" placeholder="要收信的域名，例如 flyvg.com（需已托管在这个 Cloudflare 账号）" @keyup.enter="addMailDomain(false)"/>
             <el-button type="primary" :loading="mailDomainLoading" :disabled="!mailDomainInfo.hasToken" @click="addMailDomain(false)">一键添加</el-button>
@@ -939,7 +941,7 @@
 <script setup>
 import {computed, defineOptions, nextTick, reactive, ref} from "vue";
 import {deleteBackground, setBackground, setBlackList, settingQuery, settingSet} from "@/request/setting.js";
-import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey, sendSenderList, sendSenderSave, mailDomainList, mailDomainAdd, mailDomainRemove, inboxRulesGet, inboxRulesSave, inboxRulesApply} from "@/request/resend-domain.js";
+import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey, sendSenderList, sendSenderSave, mailDomainList, mailDomainAdd, mailDomainRemove, inboxRulesGet, inboxRulesSave, inboxRulesApply, mailDomainSaveToken} from "@/request/resend-domain.js";
 import {useSettingStore} from "@/store/setting.js";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
@@ -1848,6 +1850,21 @@ const mailDomainLoading = ref(false)
 const mailDomainInput = ref('')
 const mailDomainSteps = ref([])
 const mailDomainInfo = reactive({hasToken: true, list: []})
+const mailTokenInput = ref('')
+const mailTokenLoading = ref(false)
+
+async function saveMailToken() {
+  if (!mailTokenInput.value.trim()) return
+  mailTokenLoading.value = true
+  try {
+    await mailDomainSaveToken(mailTokenInput.value.trim())
+    mailTokenInput.value = ''
+    ElMessage({message: '令牌已保存，以后部署也不会丢', type: 'success', plain: true})
+    await loadMailDomains()
+  } catch (e) {} finally {
+    mailTokenLoading.value = false
+  }
+}
 
 async function loadMailDomains() {
   mailDomainLoading.value = true

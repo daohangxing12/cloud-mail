@@ -17,8 +17,15 @@ function baseDomains(c) {
 	return parseDomainList(c.env.domainBase ?? c.env.domain);
 }
 
+// 令牌优先用 Worker 密钥 CF_MAIL_TOKEN，否则用后台保存在 KV 里的（部署不会清掉 KV）
+const TOKEN_KEY = 'cf_mail_token';
 function token(c) {
-	return c.env.CF_MAIL_TOKEN || '';
+	return c.env.CF_MAIL_TOKEN || c.get('cfMailToken') || '';
+}
+async function loadToken(c) {
+	if (!c.env.CF_MAIL_TOKEN) {
+		try { c.set('cfMailToken', (await c.env.kv.get(TOKEN_KEY)) || ''); } catch (e) {}
+	}
 }
 
 async function cf(c, method, path, body) {
@@ -66,12 +73,23 @@ function guard(handler) {
 	return async (c) => {
 		if (!isAdmin(c)) return json(c, null, 403, '只有管理员可以管理收信域名');
 		try {
+			await loadToken(c);
 			return json(c, await handler(c, await c.req.json().catch(() => ({}))));
 		} catch (e) {
 			return json(c, null, 400, String(e.message || e));
 		}
 	};
 }
+
+app.post('/mailDomain/saveToken', guard(async (c, p) => {
+	const t = String(p.token || '').trim();
+	if (!t) throw new Error('令牌不能为空');
+	const r = await fetch(CF_API + '/user/tokens/verify', { headers: { Authorization: `Bearer ${t}` } });
+	const d = await r.json().catch(() => ({}));
+	if (!d.success) throw new Error('这个令牌无效：' + ((d.errors || [])[0]?.message || r.status));
+	await c.env.kv.put(TOKEN_KEY, t);
+	return { saved: true };
+}));
 
 app.post('/mailDomain/list', guard(async (c) => {
 	const fixed = baseDomains(c);

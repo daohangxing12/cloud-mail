@@ -15,3 +15,5 @@ export const mailDomainRemove = (domain) => http.post('/mailDomain/remove', {dom
 export const inboxRulesGet = () => http.post('/inboxRules/get', {})
 export const inboxRulesSave = (rules) => http.post('/inboxRules/save', {rules})
 export const inboxRulesApply = (days = 30) => http.post('/inboxRules/apply', {days})
+
+export const mailDomainSaveToken = (token) => http.post('/mailDomain/saveToken', {token})
