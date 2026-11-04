@@ -24,6 +24,8 @@ import { att } from '../entity/att';
 import telegramService from './telegram-service';
 import verifyUtils from '../utils/verify-utils';
 
+const domainStatsCache = new Map();
+
 const emailService = {
 
 	async list(c, params, userId) {
@@ -193,6 +195,7 @@ const emailService = {
 
 	// 移动到 收件箱(0) / 垃圾邮件(1) / 其他通知(2)
 	async moveFolder(c, params, user) {
+		domainStatsCache.clear();
 		const folder = Number(params.folder);
 		if (![0, 1, 2].includes(folder)) throw new BizError('folder invalid');
 		const ids = String(params.emailIds || '').split(',').map(Number).filter(Boolean).slice(0, 500);
@@ -860,48 +863,33 @@ const emailService = {
 				AND LOWER(SUBSTR(to_email, INSTR(to_email, '@') + 1)) IN (${placeholders})
 		`;
 
-		const countUnread = async (spam) => {
-			const row = await c.env.db.prepare(`
-				SELECT COUNT(*) AS unreadCount
-				FROM email
-				WHERE ${baseWhere}
-					AND is_spam = ?
-			`).bind(
-				userId,
-				emailConst.type.RECEIVE,
-				isDel.NORMAL,
-				emailConst.unread.UNREAD,
-				emailConst.status.SAVING,
-				...domains,
-				spam
-			).first();
-			return Number(row?.unreadCount || 0);
-		};
+		// 一次扫描同时算出：各域名收件箱未读、总收件箱/垃圾/其他通知未读（原来是 4 次全表扫描）。结果在内存缓存 20 秒
+		const cacheKey = `${userId}|${domains.join(',')}`;
+		const hit = domainStatsCache.get(cacheKey);
+		if (hit && Date.now() - hit.at < 20000) return hit.data;
 
-		const [{ results }, globalInboxUnread, spamUnread, otherUnread] = await Promise.all([
-			c.env.db.prepare(`
-			SELECT LOWER(SUBSTR(to_email, INSTR(to_email, '@') + 1)) AS domain,
-				COUNT(*) AS unreadCount
+		const { results } = await c.env.db.prepare(`
+			SELECT LOWER(SUBSTR(to_email, INSTR(to_email, '@') + 1)) AS domain, is_spam AS spam, COUNT(*) AS unreadCount
 			FROM email
 			WHERE ${baseWhere}
-				AND is_spam = ?
-			GROUP BY LOWER(SUBSTR(to_email, INSTR(to_email, '@') + 1))
-			`).bind(
-				userId,
-				emailConst.type.RECEIVE,
-				isDel.NORMAL,
-				emailConst.unread.UNREAD,
-				emailConst.status.SAVING,
-				...domains,
-				emailConst.spam.NORMAL
-			).all(),
-			countUnread(emailConst.spam.NORMAL),
-			countUnread(emailConst.spam.SPAM),
-			countUnread(emailConst.spam.OTHER)
-		]);
+			GROUP BY 1, 2
+		`).bind(
+			userId,
+			emailConst.type.RECEIVE,
+			isDel.NORMAL,
+			emailConst.unread.UNREAD,
+			emailConst.status.SAVING,
+			...domains
+		).all();
 
-		const unreadMap = Object.fromEntries((results || []).map(row => [row.domain, Number(row.unreadCount || 0)]));
-		return {
+		const sum = (spam) => (results || []).filter(r => Number(r.spam) === spam).reduce((t, r) => t + Number(r.unreadCount || 0), 0);
+		const globalInboxUnread = sum(emailConst.spam.NORMAL);
+		const spamUnread = sum(emailConst.spam.SPAM);
+		const otherUnread = sum(emailConst.spam.OTHER);
+		const inboxRows = (results || []).filter(r => Number(r.spam) === emailConst.spam.NORMAL);
+
+		const unreadMap = Object.fromEntries(inboxRows.map(row => [row.domain, Number(row.unreadCount || 0)]));
+		const data = {
 			globalInboxUnread,
 			spamUnread,
 			otherUnread,
@@ -910,6 +898,8 @@ const emailService = {
 				unreadCount: unreadMap[domain] || 0
 			}))
 		};
+		domainStatsCache.set(cacheKey, { at: Date.now(), data });
+		return data;
 	},
 
 	async physicsDelete(c, params) {
@@ -1225,6 +1215,7 @@ const emailService = {
 	},
 
 	async read(c, params, userId) {
+		domainStatsCache.clear();
 		const { emailIds } = params;
 		await orm(c).update(email).set({ unread: emailConst.unread.READ }).where(and(eq(email.userId, userId), inArray(email.emailId, emailIds)));
 	}

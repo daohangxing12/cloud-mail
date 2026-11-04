@@ -47,7 +47,7 @@
             </div>
             <div class="ss-row">
               <div class="ss-text"><b>自动清理旧邮件</b><span>{{ cleanSummary }}</span></div>
-              <el-button size="small" @click="openInboxRules">设置</el-button>
+              <el-button size="small" @click="openClean">设置</el-button>
             </div>
             <div class="ss-row">
               <div class="ss-text"><b>收件箱自动刷新</b><span>多久自动检查一次新邮件</span></div>
@@ -343,6 +343,26 @@
         </form>
       </el-dialog>
 
+      <el-dialog v-model="cleanShow" title="自动清理旧邮件" width="460">
+        <div class="send-domain" v-loading="inboxRulesLoading">
+          <p class="sd-hint" style="margin-top: 0">超过天数的邮件会被彻底删除（所有域名）。加了星标的邮件永远不删。填 0 = 不删。每天凌晨自动执行一次，删除后不能恢复。</p>
+          <div class="sd-row" style="gap: 10px; margin-top: 12px">
+            <span style="width: 110px">垃圾邮件超过</span>
+            <el-input-number v-model="inboxRules.cleanSpamDays" :min="0" :max="3650" size="small" style="width: 120px"/>
+            <span>天</span>
+          </div>
+          <div class="sd-row" style="gap: 10px; margin-top: 12px">
+            <span style="width: 110px">收件箱超过</span>
+            <el-input-number v-model="inboxRules.cleanInboxDays" :min="0" :max="3650" size="small" style="width: 120px"/>
+            <span>天</span>
+          </div>
+        </div>
+        <template #footer>
+          <el-button :loading="inboxCleanLoading" @click="cleanNow">现在就清理</el-button>
+          <el-button type="primary" :loading="inboxRulesLoading" @click="saveInboxRules">保存</el-button>
+        </template>
+      </el-dialog>
+
       <el-dialog v-model="inboxRulesShow" title="收信分类规则" width="720">
         <div class="send-domain" v-loading="inboxRulesLoading">
           <div class="sd-row">
@@ -365,21 +385,11 @@
             <el-form-item label="这些发件方永远进收件箱（域名或邮箱，含子域名，如 paypal.com、apple.com）">
               <el-input v-model="inboxRules.fromText" type="textarea" :rows="2"/>
             </el-form-item>
-            <div class="ss-title" style="margin-top: 14px">自动清理旧邮件（所有域名，星标邮件永远不删）</div>
-            <div class="sd-row" style="gap: 10px; flex-wrap: wrap">
-              <span>垃圾邮箱超过</span>
-              <el-input-number v-model="inboxRules.cleanSpamDays" :min="0" :max="3650" size="small" style="width: 110px"/>
-              <span>天自动删除；收件箱超过</span>
-              <el-input-number v-model="inboxRules.cleanInboxDays" :min="0" :max="3650" size="small" style="width: 110px"/>
-              <span>天自动删除（填 0 = 不删）</span>
-            </div>
-            <p class="sd-hint">每 30 分钟自动执行一次。删除后不能恢复。</p>
           </el-form>
         </div>
         <template #footer>
           <el-button @click="resetInboxRules">恢复默认</el-button>
           <el-button :loading="inboxApplyLoading" @click="applyInboxRules">整理最近 30 天邮件</el-button>
-          <el-button :loading="inboxCleanLoading" @click="cleanNow">现在就清理</el-button>
           <el-button type="primary" :loading="inboxRulesLoading" @click="saveInboxRules">保存</el-button>
         </template>
       </el-dialog>
@@ -1555,6 +1565,20 @@ function fillInboxRules(r) {
   inboxRules.replyToInbox = r.replyToInbox !== false
 }
 
+const cleanShow = ref(false)
+
+async function openClean() {
+  cleanShow.value = true
+  inboxRulesLoading.value = true
+  try {
+    const data = await inboxRulesGet()
+    inboxDefaults = data.defaults
+    fillInboxRules(data.rules)
+  } catch (e) {} finally {
+    inboxRulesLoading.value = false
+  }
+}
+
 async function openInboxRules() {
   inboxRulesShow.value = true
   inboxRulesLoading.value = true
@@ -1593,7 +1617,7 @@ inboxRulesGet().then(data => { inboxDefaults = data.defaults; fillInboxRules(dat
 
 async function cleanNow() {
   try {
-    await ElMessageBox.confirm('会按上面的天数立刻彻底删除旧邮件（先点保存才按新天数），删了不能恢复。继续？', '现在就清理', {confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning'})
+    await ElMessageBox.confirm('会按保存过的天数立刻彻底删除旧邮件（改了天数请先点保存），删了不能恢复。继续？', '现在就清理', {confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning'})
   } catch (e) {
     return
   }

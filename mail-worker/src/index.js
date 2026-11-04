@@ -42,11 +42,12 @@ export default {
 	async scheduled(c, env, ctx) {
 		env = await withExtraDomains(env);
 		if (c.cron === '*/30 * * * *') {
-			try { await cleanOldMail(env); } catch (e) { console.error('自动清理邮件失败', e); }
 			await analysisService.refreshEchartsCache({ env })
 			return;
 		}
 
+		// 每天一次（北京时间 0 点）：按天数清理旧邮件
+		try { await cleanOldMail(env); } catch (e) { console.error('自动清理邮件失败', e); }
 		await verifyRecordService.clearRecord({ env })
 		await userService.resetDaySendCount({ env })
 		await emailService.completeReceiveAll({ env })
