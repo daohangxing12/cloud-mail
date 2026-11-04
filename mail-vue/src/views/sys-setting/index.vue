@@ -195,6 +195,12 @@
                 </div>
               </div>
               <div class="setting-item">
+                <div><span>收件箱规则</span></div>
+                <div>
+                  <el-button class="opt-button" style="margin-top: 0" @click="openInboxRules" size="small" type="primary">设置</el-button>
+                </div>
+              </div>
+              <div class="setting-item">
                 <div><span>收信域名</span></div>
                 <div>
                   <el-button class="opt-button" style="margin-top: 0" @click="openMailDomain" size="small" type="primary">管理</el-button>
@@ -634,6 +640,32 @@
           </div>
         </template>
       </el-dialog>
+      <el-dialog v-model="inboxRulesShow" title="收件箱规则" width="720">
+        <div class="send-domain" v-loading="inboxRulesLoading">
+          <div class="sd-row">
+            <el-switch v-model="inboxRules.enabled" active-text="只让重要邮件进收件箱，其余进垃圾邮箱"/>
+          </div>
+          <p class="sd-hint">命中下面任意一条就进收件箱（不分大小写，一行一个）。点赞、关注、转发、营销等通知全部进垃圾邮箱，不推送 TG、不转发。接码链接照常能取到垃圾邮箱里的验证码，TikTok 资料识别也不受影响。</p>
+          <el-form label-position="top">
+            <el-form-item label="主题包含">
+              <el-input v-model="inboxRules.subjectText" type="textarea" :rows="8"/>
+            </el-form-item>
+            <el-form-item label="正文包含">
+              <el-input v-model="inboxRules.bodyText" type="textarea" :rows="3"/>
+            </el-form-item>
+            <el-form-item label="发件人域名或邮箱（自家域名来信）">
+              <el-input v-model="inboxRules.fromText" type="textarea" :rows="2"/>
+            </el-form-item>
+            <el-checkbox v-model="inboxRules.replyToInbox">别人回复我的邮件进收件箱</el-checkbox>
+          </el-form>
+        </div>
+        <template #footer>
+          <el-button @click="resetInboxRules">恢复默认</el-button>
+          <el-button :loading="inboxApplyLoading" @click="applyInboxRules">整理最近 30 天邮件</el-button>
+          <el-button type="primary" :loading="inboxRulesLoading" @click="saveInboxRules">保存</el-button>
+        </template>
+      </el-dialog>
+
       <el-dialog v-model="mailDomainShow" title="收信域名" width="720">
         <div class="send-domain">
           <el-alert v-if="!mailDomainInfo.hasToken" type="warning" :closable="false"
@@ -904,7 +936,7 @@
 <script setup>
 import {computed, defineOptions, nextTick, reactive, ref} from "vue";
 import {deleteBackground, setBackground, setBlackList, settingQuery, settingSet} from "@/request/setting.js";
-import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey, sendSenderList, sendSenderSave, mailDomainList, mailDomainAdd, mailDomainRemove} from "@/request/resend-domain.js";
+import {resendDomainAdd, resendDomainApplyDns, resendDomainGet, resendDomainList, resendDomainVerify, resendSaveKey, sendSenderList, sendSenderSave, mailDomainList, mailDomainAdd, mailDomainRemove, inboxRulesGet, inboxRulesSave, inboxRulesApply} from "@/request/resend-domain.js";
 import {useSettingStore} from "@/store/setting.js";
 import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
@@ -1753,6 +1785,59 @@ async function applySendDns(row) {
     sendLoading.value = false
   }
 }
+// ===== 收件箱规则 =====
+const inboxRulesShow = ref(false)
+const inboxRulesLoading = ref(false)
+const inboxApplyLoading = ref(false)
+const inboxRules = reactive({enabled: true, subjectText: '', bodyText: '', fromText: '', replyToInbox: true})
+let inboxDefaults = null
+
+function fillInboxRules(r) {
+  inboxRules.enabled = r.enabled !== false
+  inboxRules.subjectText = (r.subject || []).join('\n')
+  inboxRules.bodyText = (r.body || []).join('\n')
+  inboxRules.fromText = (r.from || []).join('\n')
+  inboxRules.replyToInbox = r.replyToInbox !== false
+}
+
+async function openInboxRules() {
+  inboxRulesShow.value = true
+  inboxRulesLoading.value = true
+  try {
+    const data = await inboxRulesGet()
+    inboxDefaults = data.defaults
+    fillInboxRules(data.rules)
+  } catch (e) {} finally {
+    inboxRulesLoading.value = false
+  }
+}
+
+function resetInboxRules() {
+  if (inboxDefaults) fillInboxRules(inboxDefaults)
+}
+
+async function saveInboxRules() {
+  inboxRulesLoading.value = true
+  try {
+    const split = (t) => t.split('\n').map(s => s.trim()).filter(Boolean)
+    const data = await inboxRulesSave({enabled: inboxRules.enabled, subject: split(inboxRules.subjectText), body: split(inboxRules.bodyText), from: split(inboxRules.fromText), replyToInbox: inboxRules.replyToInbox})
+    fillInboxRules(data.rules)
+    ElMessage({message: '已保存，新邮件立即按此规则分类', type: 'success', plain: true})
+  } catch (e) {} finally {
+    inboxRulesLoading.value = false
+  }
+}
+
+async function applyInboxRules() {
+  inboxApplyLoading.value = true
+  try {
+    const data = await inboxRulesApply(30)
+    ElMessage({message: `检查了 ${data.scanned} 封：${data.movedToSpam} 封移到垃圾邮箱，${data.movedToInbox} 封移回收件箱`, type: 'success', plain: true})
+  } catch (e) {} finally {
+    inboxApplyLoading.value = false
+  }
+}
+
 // ===== 收信域名 =====
 const mailDomainShow = ref(false)
 const mailDomainLoading = ref(false)

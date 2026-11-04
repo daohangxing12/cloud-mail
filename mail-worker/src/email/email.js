@@ -13,6 +13,7 @@ import telegramService from '../service/telegram-service';
 import aiService from '../service/ai-service';
 import subAccountService from '../service/sub-account-service';
 import creatorRewardsService from '../service/creator-rewards-service';
+import { readInboxRules, isImportant } from '../utils/inbox-rules';
 
 export async function email(message, env, ctx) {
 
@@ -53,6 +54,12 @@ export async function email(message, env, ctx) {
 
 
 		const blockFlag = checkBlock(blackSubject, blackContent, blackFrom, email);
+
+		// 白名单：没命中重要规则的一律进垃圾邮箱（不影响 TikTok 资料识别和接码）
+		const inboxRules = await readInboxRules(env);
+		const notImportant = !blockFlag && inboxRules.enabled && !isImportant(inboxRules, {
+			subject: email.subject, text: email.text, html: email.html, from: email.from?.address, inReplyTo: email.inReplyTo
+		});
 
 		let account = await accountService.selectByEmailIncludeDel({ env: env }, message.to);
 		let catchAllReceive = false;
@@ -118,7 +125,7 @@ export async function email(message, env, ctx) {
 			messageId: email.messageId,
 			userId: account ? account.userId : 0,
 			accountId: account ? account.accountId : 0,
-			isSpam: blockFlag ? emailConst.spam.SPAM : emailConst.spam.NORMAL,
+			isSpam: (blockFlag || notImportant) ? emailConst.spam.SPAM : emailConst.spam.NORMAL,
 			isDel: isDel.DELETE,
 			status: emailConst.status.SAVING
 		};
@@ -159,6 +166,11 @@ export async function email(message, env, ctx) {
 		}
 		await creatorRewardsService.updateFromIncomingEmail({ env }, message.to, email, emailRow);
 
+
+		// 非重要邮件不推送 TG / 不转发
+		if (notImportant) {
+			return;
+		}
 
 		if (ruleType === settingConst.ruleType.RULE) {
 
@@ -217,7 +229,7 @@ function isManagedEmailDomain(env, address) {
 	return domainList.map(item => String(item).replace(/^@/, '').toLowerCase()).includes(domain);
 }
 
-function checkBlock(blackSubjectStr, blackContentStr, blackFromStr, email) {
+export function checkBlock(blackSubjectStr, blackContentStr, blackFromStr, email) {
 
 	const blackFromList = blackFromStr ? blackFromStr.split(',') : []
 	const blackContentList = blackContentStr ? blackContentStr.split(',') : []

@@ -26,4 +26,5 @@ import '../api/asset-api'
 import '../api/batch-api'
 import '../api/resend-domain-api'
 import '../api/mail-domain-api'
+import '../api/inbox-rules-api'
 export default app;
