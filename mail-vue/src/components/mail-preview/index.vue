@@ -53,9 +53,30 @@
             <el-alert v-if="currentEmail.status === 5" :closable="false" :title="t('delayed')" class="email-msg" type="warning" show-icon />
             </div>
           </div>
+          <div class="lq-translate" v-if="tr.show">
+            <span class="lq-translate-icon">文</span>
+            <span class="lq-translate-info">{{ tr.busy ? tr.progress : (tr.done ? '已翻译成' + LANGS[tr.target] : '此邮件可能为' + LANGS[tr.source]) }}</span>
+            <el-button v-if="!tr.done" size="small" type="primary" :loading="tr.busy" @click="translate">翻译成{{ LANGS[tr.target] }}</el-button>
+            <el-button v-else size="small" @click="restoreOriginal">查看原文</el-button>
+            <el-dropdown trigger="click" :hide-on-click="false">
+              <span class="lq-translate-more">⋯</span>
+              <template #dropdown>
+                <div class="lq-translate-menu">
+                  <label>邮件语言</label>
+                  <el-select v-model="tr.source" size="small" @change="onLangChange">
+                    <el-option v-for="(name, code) in LANGS" :key="code" :label="name" :value="code"/>
+                  </el-select>
+                  <label>翻译成</label>
+                  <el-select v-model="tr.target" size="small" @change="onLangChange">
+                    <el-option v-for="(name, code) in LANGS" :key="code" :label="name" :value="code"/>
+                  </el-select>
+                </div>
+              </template>
+            </el-dropdown>
+          </div>
           <div class="message-stage" :class="{ 'plain-stage': !currentEmail.content }">
-            <ShadowHtml class="shadow-html" :html="formatImage(currentEmail.content)" v-if="currentEmail.content" />
-            <pre v-else class="email-text">{{ currentEmail.text }}</pre>
+            <ShadowHtml ref="shadowRef" class="shadow-html" :html="formatImage(currentEmail.content)" v-if="currentEmail.content" />
+            <pre v-else class="email-text">{{ tr.plain ?? currentEmail.text }}</pre>
           </div>
           <div class="att" v-if="attList.length > 0">
             <div class="att-title">
@@ -101,7 +122,7 @@ import { Icon } from '@iconify/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ShadowHtml from '@/components/shadow-html/index.vue'
 import SenderAvatar from '@/components/sender-avatar/index.vue'
-import { emailBlockSender, emailDelete, emailMoveFolder, emailRead } from '@/request/email.js'
+import { emailBlockSender, emailDelete, emailMoveFolder, emailRead, emailTranslate } from '@/request/email.js'
 import { allEmailDelete } from '@/request/all-email.js'
 import { starAdd, starCancel } from '@/request/star.js'
 import { useEmailStore } from '@/store/email.js'
@@ -154,6 +175,133 @@ watch(
   () => markRead(),
   { immediate: true }
 )
+
+// ===== 邮件翻译（对应原 VPS 的 flygw_translate）=====
+const LANGS = {zh: '中文', en: '英语', vi: '越南语', ja: '日语', ko: '韩语', th: '泰语', id: '印尼语', ms: '马来语', es: '西班牙语', fr: '法语', de: '德语', pt: '葡萄牙语', it: '意大利语', ru: '俄语', ar: '阿拉伯语', tr: '土耳其语', hi: '印地语'}
+const shadowRef = ref(null)
+const tr = reactive({show: false, source: 'en', target: 'zh', busy: false, done: false, progress: '', plain: null})
+let changed = []
+// 放在 tr 定义之后，避免立即执行时 tr 还没初始化
+watch(() => [currentEmail.value.emailId, currentEmail.value.content, currentEmail.value.text], () => resetTranslate(), { immediate: true })
+
+function readTarget() {
+  try { const v = localStorage.getItem('mail-translate-target'); if (LANGS[v]) return v } catch (e) {}
+  return 'zh'
+}
+
+// 按文字特征粗略判断邮件语言（拉丁字母默认英语，可在 ⋯ 里改）
+function detectLang(text) {
+  const t = String(text || '').slice(0, 4000)
+  const count = (re) => (t.match(re) || []).length
+  const letters = count(/[\p{L}]/gu) || 1
+  if (count(/[\u3040-\u30ff]/g) > 5) return 'ja'
+  if (count(/[\uac00-\ud7af]/g) / letters > 0.2) return 'ko'
+  if (count(/[\u4e00-\u9fff]/g) / letters > 0.3) return 'zh'
+  if (count(/[\u0e00-\u0e7f]/g) / letters > 0.2) return 'th'
+  if (count(/[\u0600-\u06ff]/g) / letters > 0.2) return 'ar'
+  if (count(/[\u0400-\u04ff]/g) / letters > 0.2) return 'ru'
+  if (count(/[\u0900-\u097f]/g) / letters > 0.2) return 'hi'
+  if (count(/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/gi) > 5) return 'vi'
+  if (count(/[a-z]/gi) / letters > 0.5) return 'en'
+  return ''
+}
+
+function bodyText() {
+  const email = currentEmail.value
+  if (email.text) return email.text
+  return String(email.content || '').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ')
+}
+
+function resetTranslate() {
+  changed = []
+  tr.busy = false
+  tr.done = false
+  tr.plain = null
+  tr.target = readTarget()
+  const lang = detectLang(bodyText())
+  tr.source = lang || 'en'
+  tr.show = !!currentEmail.value.emailId && !!lang && lang !== tr.target
+}
+
+function onLangChange() {
+  try { localStorage.setItem('mail-translate-target', tr.target) } catch (e) {}
+  restoreOriginal()
+}
+
+function restoreOriginal() {
+  changed.forEach(item => { if (item.node.isConnected) item.node.nodeValue = item.value })
+  changed = []
+  tr.plain = null
+  tr.done = false
+}
+
+function collectNodes(root) {
+  const nodes = []
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement
+      if (parent && /^(STYLE|SCRIPT|NOSCRIPT)$/.test(parent.tagName)) return NodeFilter.FILTER_REJECT
+      const v = node.nodeValue.trim()
+      if (v.length < 2 || /^[\d\s\p{P}\p{S}]+$/u.test(v) || /^https?:\/\//.test(v)) return NodeFilter.FILTER_REJECT
+      return NodeFilter.FILTER_ACCEPT
+    }
+  })
+  while (walker.nextNode()) nodes.push(walker.currentNode)
+  return nodes
+}
+
+function batches(list, maxCount = 80, maxChars = 11000) {
+  const out = []
+  let cur = [], size = 0
+  for (const item of list) {
+    const len = item.text.length
+    if (cur.length && (cur.length >= maxCount || size + len > maxChars)) { out.push(cur); cur = []; size = 0 }
+    cur.push(item)
+    size += len
+  }
+  if (cur.length) out.push(cur)
+  return out
+}
+
+async function translate() {
+  if (tr.busy) return
+  tr.busy = true
+  restoreOriginal()
+  try {
+    const root = shadowRef.value?.getRoot?.()
+    if (currentEmail.value.content && root) {
+      const items = collectNodes(root).map(node => ({node, text: node.nodeValue.slice(0, 2000)}))
+      const groups = batches(items)
+      for (let i = 0; i < groups.length; i++) {
+        tr.progress = `翻译中 ${i + 1}/${groups.length}…`
+        const data = await emailTranslate(groups[i].map(x => x.text), tr.source, tr.target)
+        groups[i].forEach((item, k) => {
+          const value = data.segments?.[k]
+          if (value && item.node.isConnected) {
+            changed.push({node: item.node, value: item.node.nodeValue})
+            item.node.nodeValue = value
+          }
+        })
+      }
+    } else {
+      const paragraphs = String(currentEmail.value.text || '').split(/\n{2,}/)
+      const items = paragraphs.map(text => ({text: text.slice(0, 3000)}))
+      const out = []
+      const groups = batches(items)
+      for (let i = 0; i < groups.length; i++) {
+        tr.progress = `翻译中 ${i + 1}/${groups.length}…`
+        const data = await emailTranslate(groups[i].map(x => x.text), tr.source, tr.target)
+        out.push(...(data.segments || []))
+      }
+      tr.plain = out.join('\n\n')
+    }
+    tr.done = true
+  } catch (e) {
+    // 出错信息已由请求层提示
+  } finally {
+    tr.busy = false
+  }
+}
 
 function markRead() {
   const email = currentEmail.value
@@ -405,6 +553,48 @@ function handleBlockSender() {
 .email-msg {
   margin-top: 10px;
   max-width: 560px;
+}
+
+.lq-translate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 24px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--lq-border);
+  border-radius: 8px;
+  background: var(--lq-side);
+  font-size: 13px;
+  color: var(--lq-muted);
+}
+.lq-translate-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--lq-primary);
+  color: var(--lq-on-primary);
+  font-size: 12px;
+  flex: none;
+}
+.lq-translate-info {
+  flex: 1;
+  min-width: 0;
+}
+.lq-translate-more {
+  cursor: pointer;
+  padding: 0 6px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--lq-text);
+}
+.lq-translate-menu {
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+  width: 200px;
+  label { font-size: 12px; color: var(--lq-muted); }
 }
 
 .message-stage {

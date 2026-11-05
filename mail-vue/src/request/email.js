@@ -36,3 +36,7 @@ export function emailSend(form,progress) {
 export function emailMoveFolder(emailIds, folder) {
     return http.post('/email/moveFolder', {emailIds: String(emailIds), folder})
 }
+
+export function emailTranslate(segments, source, target) {
+    return http.post('/email/translate', {segments, source, target}, {timeout: 120 * 1000})
+}

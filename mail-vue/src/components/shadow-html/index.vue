@@ -107,6 +107,9 @@ watch(() => props.html, () => {
   updateContent()
   autoScale()
 })
+
+// 给翻译用：拿到邮件正文的 DOM
+defineExpose({ getRoot: () => shadowRoot })
 </script>
 
 <style scoped>

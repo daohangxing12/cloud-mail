@@ -35,12 +35,36 @@
             </div>
             <div class="ss-row">
               <div class="ss-text"><b>收信域名</b><span>添加新域名，一键配置 Cloudflare 收信</span></div>
-              <el-button size="small" type="primary" @click="openMailDomain">管理</el-button>
+              <el-button size="small" type="primary" @click="openMailDomain('domains')">管理</el-button>
             </div>
             <div class="ss-row">
-              <div class="ss-text"><b>收信分类规则</b><span>重要→收件箱，推广→垃圾邮件，其余→其他通知（只管 TikTok 业务域名）</span></div>
-              <el-button size="small" type="primary" @click="openInboxRules">设置</el-button>
+              <div class="ss-text"><b>Cloudflare 令牌</b><span>一键添加收信域名要用到，保存后部署也不会丢</span></div>
+              <el-button size="small" @click="openMailDomain('token')">设置</el-button>
             </div>
+
+            <div class="ss-sub">收信分类（重要 → 收件箱，推广 → 垃圾邮件，其余 → 其他通知）</div>
+            <div class="ss-row">
+              <div class="ss-text"><b>开启分类 / 生效域名</b><span>{{ inboxRules.enabled ? '已开启' : '已关闭' }}：只管填写的域名，其他域名照常进收件箱</span></div>
+              <el-button size="small" type="primary" @click="openInboxRules('scope')">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>重要邮件关键词</b><span>主题或正文包含这些词 → 收件箱（验证码、开通、登录、申诉…）</span></div>
+              <el-button size="small" @click="openInboxRules('important')">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>推广邮件关键词</b><span>主题包含这些词 → 垃圾邮件</span></div>
+              <el-button size="small" @click="openInboxRules('marketing')">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>永远进收件箱的发件人</b><span>例如 paypal.com、apple.com，含子域名</span></div>
+              <el-button size="small" @click="openInboxRules('from')">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>按规则整理旧邮件</b><span>把最近 30 天收到的邮件按现在的规则重新分一遍</span></div>
+              <el-button size="small" :loading="inboxApplyLoading" @click="applyInboxRules">整理</el-button>
+            </div>
+
+            <div class="ss-sub">其他</div>
             <div class="ss-row">
               <div class="ss-text"><b>垃圾邮件黑名单</b><span>这些发件人 / 主题 / 内容直接进垃圾邮箱</span></div>
               <el-button size="small" @click="openBlackListForm">设置</el-button>
@@ -64,8 +88,16 @@
               <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1" v-model="setting.send"/>
             </div>
             <div class="ss-row">
-              <div class="ss-text"><b>发信设置</b><span>Resend 密钥、发信域名、可以用来发信的地址</span></div>
-              <el-button size="small" type="primary" @click="openSendDomain">设置</el-button>
+              <div class="ss-text"><b>Resend 密钥</b><span>{{ sendInfo.hasKey ? '已保存，所有发信域名共用' : '还没保存' }}</span></div>
+              <el-button size="small" @click="openSendDomain('key')">设置</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>发信域名</b><span>添加、验证用来发信的域名</span></div>
+              <el-button size="small" type="primary" @click="openSendDomain('domains')">管理</el-button>
+            </div>
+            <div class="ss-row">
+              <div class="ss-text"><b>发件地址</b><span>写信时只能选这些地址发出</span></div>
+              <el-button size="small" @click="openSendDomain('senders')">设置</el-button>
             </div>
           </div>
 
@@ -363,44 +395,58 @@
         </template>
       </el-dialog>
 
-      <el-dialog v-model="inboxRulesShow" title="收信分类规则" width="720">
+      <el-dialog v-model="inboxRulesShow" :title="ruleTitles[ruleSection]" width="560">
         <div class="send-domain" v-loading="inboxRulesLoading">
-          <div class="sd-row">
-            <el-switch v-model="inboxRules.enabled" active-text="开启收信分类（和原 VPS 邮局同一套规则）"/>
-          </div>
-          <p class="sd-hint">按顺序判断：① 主题/正文命中「重要」→ 收件箱；② 主题命中「推广」→ 垃圾邮件；③ 其余（点赞、关注、发视频等通知）→ 其他通知。不分大小写，一行一个。接码链接三个文件夹都能取到验证码。看到漏判的，把完整标题加到「重要」里。</p>
           <el-form label-position="top">
-            <el-form-item label="只对这些收件域名生效（做 TikTok 业务的；留空 = 所有域名）。不在列表里的域名不过滤，照常进收件箱">
-              <el-input v-model="inboxRules.domainsText" type="textarea" :rows="3"/>
-            </el-form-item>
-            <el-form-item label="① 重要：主题包含（→ 收件箱）">
-              <el-input v-model="inboxRules.subjectText" type="textarea" :rows="8"/>
-            </el-form-item>
-            <el-form-item label="① 重要：正文包含（→ 收件箱）">
-              <el-input v-model="inboxRules.bodyText" type="textarea" :rows="3"/>
-            </el-form-item>
-            <el-form-item label="② 推广：主题包含（→ 垃圾邮件）">
-              <el-input v-model="inboxRules.marketingText" type="textarea" :rows="4"/>
-            </el-form-item>
-            <el-form-item label="这些发件方永远进收件箱（域名或邮箱，含子域名，如 paypal.com、apple.com）">
-              <el-input v-model="inboxRules.fromText" type="textarea" :rows="2"/>
-            </el-form-item>
+            <template v-if="ruleSection === 'scope'">
+              <div class="sd-row" style="margin-bottom: 12px">
+                <el-switch v-model="inboxRules.enabled" active-text="开启收信分类（和原 VPS 邮局同一套规则）"/>
+              </div>
+              <el-form-item label="只对这些收件域名生效（一行一个；留空 = 所有域名）">
+                <el-input v-model="inboxRules.domainsText" type="textarea" :rows="4"/>
+              </el-form-item>
+              <p class="sd-hint">不在列表里的域名不分类，邮件照常进收件箱。</p>
+            </template>
+            <template v-else-if="ruleSection === 'important'">
+              <el-form-item label="主题包含（一行一个，不分大小写）">
+                <el-input v-model="inboxRules.subjectText" type="textarea" :rows="12"/>
+              </el-form-item>
+              <el-form-item label="正文包含">
+                <el-input v-model="inboxRules.bodyText" type="textarea" :rows="4"/>
+              </el-form-item>
+              <p class="sd-hint">命中任意一条就进收件箱。看到漏判的重要邮件，把它的完整标题加进来。</p>
+            </template>
+            <template v-else-if="ruleSection === 'marketing'">
+              <el-form-item label="主题包含（一行一个，不分大小写）">
+                <el-input v-model="inboxRules.marketingText" type="textarea" :rows="10"/>
+              </el-form-item>
+              <p class="sd-hint">命中的进垃圾邮件；没命中、也不是重要邮件的进「其他通知」。</p>
+            </template>
+            <template v-else-if="ruleSection === 'from'">
+              <el-form-item label="域名或邮箱（一行一个，含子域名）">
+                <el-input v-model="inboxRules.fromText" type="textarea" :rows="8"/>
+              </el-form-item>
+              <p class="sd-hint">这些发件方的邮件不管内容是什么，都进收件箱。</p>
+            </template>
           </el-form>
         </div>
         <template #footer>
           <el-button @click="resetInboxRules">恢复默认</el-button>
-          <el-button :loading="inboxApplyLoading" @click="applyInboxRules">整理最近 30 天邮件</el-button>
           <el-button type="primary" :loading="inboxRulesLoading" @click="saveInboxRules">保存</el-button>
         </template>
       </el-dialog>
 
-      <el-dialog v-model="mailDomainShow" title="收信域名" width="720">
-        <div class="send-domain">
+      <el-dialog v-model="mailDomainShow" :title="mailSection === 'token' ? 'Cloudflare 令牌' : '收信域名'" :width="mailSection === 'token' ? 520 : 720">
+        <div class="send-domain" v-if="mailSection === 'token'">
+          <p class="sd-hint" style="margin-top: 0">{{ mailDomainInfo.hasToken ? '令牌已保存。要换新的，粘贴后点保存。' : '还没有令牌。在 Cloudflare 创建一个 API 令牌（权限：Zone 读取、DNS 编辑、Email Routing 规则编辑、Zone 设置编辑；范围：所有域名），粘贴到这里。' }}</p>
           <div class="sd-row">
             <el-input v-model="mailTokenInput" type="password" show-password :placeholder="mailDomainInfo.hasToken ? 'Cloudflare 令牌已保存（要换就粘贴新的）' : '粘贴 Cloudflare API 令牌（Zone 读取、DNS 编辑、Email Routing 规则编辑、Zone 设置编辑）'"/>
             <el-button type="primary" :loading="mailTokenLoading" @click="saveMailToken">保存令牌</el-button>
           </div>
-          <div class="sd-row" style="margin-top: 10px">
+        </div>
+        <div class="send-domain" v-else>
+          <el-alert v-if="!mailDomainInfo.hasToken" type="warning" :closable="false" title="还没有保存 Cloudflare 令牌，先到「Cloudflare 令牌」那一项保存，才能一键添加。" style="margin-bottom: 10px"/>
+          <div class="sd-row">
             <el-input v-model="mailDomainInput" placeholder="要收信的域名，例如 flyvg.com（需已托管在这个 Cloudflare 账号）" @keyup.enter="addMailDomain(false)"/>
             <el-button type="primary" :loading="mailDomainLoading" :disabled="!mailDomainInfo.hasToken" @click="addMailDomain(false)">一键添加</el-button>
             <el-button :loading="mailDomainLoading" @click="loadMailDomains">刷新</el-button>
@@ -434,13 +480,15 @@
           </p>
         </div>
       </el-dialog>
-      <el-dialog v-model="sendDomainShow" title="发信域名（Resend）" width="680">
+      <el-dialog v-model="sendDomainShow" :title="{key: 'Resend 密钥', domains: '发信域名', senders: '发件地址'}[sendSection]" :width="sendSection === 'domains' ? 680 : 520">
         <div class="send-domain">
-          <div class="sd-row">
+          <div class="sd-row" v-if="sendSection === 'key'">
             <el-input v-model="sendKeyInput" type="password" show-password
                       :placeholder="sendInfo.hasKey ? '已保存通用密钥，填写新的可替换' : '粘贴 Resend 密钥（re_ 开头），所有域名共用'"/>
             <el-button type="primary" :loading="sendLoading" @click="saveSendKey">保存密钥</el-button>
           </div>
+          <template v-if="sendSection === 'domains'">
+          <el-alert v-if="!sendInfo.hasKey" type="warning" :closable="false" title="还没有保存 Resend 密钥，先到「Resend 密钥」那一项保存。" style="margin-bottom: 10px"/>
           <div class="sd-row">
             <el-input v-model="sendDomainInput" placeholder="要发信的域名，例如 ntmcn.com" @keyup.enter="addSendDomain"/>
             <el-button type="primary" :loading="sendLoading" :disabled="!sendInfo.hasKey" @click="addSendDomain">添加域名</el-button>
@@ -464,8 +512,8 @@
               </template>
             </el-table-column>
           </el-table>
-          <div class="sd-senders">
-            <div class="sd-title">发件地址（写信时只显示这些）</div>
+          </template>
+          <div class="sd-senders" v-if="sendSection === 'senders'" style="margin-top: 0">
             <el-input v-model="senderText" type="textarea" :rows="3"
                       placeholder="每行一个，例如 support@ntmcn.com。没有的邮箱会自动创建；留空则显示全部邮箱"/>
             <div class="sd-row" style="margin-top: 8px">
@@ -473,7 +521,7 @@
               <span class="sd-hint" style="margin: 0; align-self: center">发件地址的域名需要在上面列表里「已验证」才能发到外部邮箱</span>
             </div>
           </div>
-          <div v-if="sendRecords.name" class="sd-records">
+          <div v-if="sendSection === 'domains' && sendRecords.name" class="sd-records">
             <div class="sd-title">{{ sendRecords.name }} 需要的 DNS 记录</div>
             <el-table :data="sendRecords.records" size="small">
               <el-table-column prop="type" label="类型" width="70"/>
@@ -1442,7 +1490,10 @@ async function saveSenders() {
   }
 }
 
-function openSendDomain() {
+const sendSection = ref('domains')
+
+function openSendDomain(section = 'domains') {
+  sendSection.value = section
   sendDomainShow.value = true
   sendRecords.name = ''
   loadSendDomains()
@@ -1579,7 +1630,11 @@ async function openClean() {
   }
 }
 
-async function openInboxRules() {
+const ruleSection = ref('scope')
+const ruleTitles = {scope: '开启分类 / 生效域名', important: '重要邮件关键词', marketing: '推广邮件关键词', from: '永远进收件箱的发件人'}
+
+async function openInboxRules(section = 'scope') {
+  ruleSection.value = section
   inboxRulesShow.value = true
   inboxRulesLoading.value = true
   try {
@@ -1591,8 +1646,15 @@ async function openInboxRules() {
   }
 }
 
+// 只恢复当前这一项的默认值
 function resetInboxRules() {
-  if (inboxDefaults) fillInboxRules(inboxDefaults)
+  if (!inboxDefaults) return
+  const d = inboxDefaults
+  const join = (v) => (v || []).join('\n')
+  if (ruleSection.value === 'scope') { inboxRules.enabled = d.enabled !== false; inboxRules.domainsText = join(d.domains) }
+  if (ruleSection.value === 'important') { inboxRules.subjectText = join(d.subject); inboxRules.bodyText = join(d.body) }
+  if (ruleSection.value === 'marketing') inboxRules.marketingText = join(d.marketing)
+  if (ruleSection.value === 'from') inboxRules.fromText = join(d.from)
 }
 
 async function saveInboxRules() {
@@ -1614,6 +1676,7 @@ const cleanSummary = computed(() => {
   return a + b
 })
 inboxRulesGet().then(data => { inboxDefaults = data.defaults; fillInboxRules(data.rules) }).catch(() => {})
+resendDomainList().then(data => Object.assign(sendInfo, data)).catch(() => {})
 
 async function cleanNow() {
   try {
@@ -1671,7 +1734,10 @@ async function loadMailDomains() {
   }
 }
 
-function openMailDomain() {
+const mailSection = ref('domains')
+
+function openMailDomain(section = 'domains') {
+  mailSection.value = section
   mailDomainShow.value = true
   mailDomainSteps.value = []
   loadMailDomains()
@@ -1818,7 +1884,12 @@ function removeMailDomain(row) {
   gap: 24px;
   padding: 16px 0;
   border-bottom: 1px solid var(--lq-border);
-  .ss-title + & { border-top: 1px solid var(--lq-border); }
+  .ss-title + &, .ss-sub + & { border-top: 1px solid var(--lq-border); }
+}
+.ss-sub {
+  margin: 22px 0 4px;
+  font-size: 12px;
+  color: var(--lq-muted);
 }
 .ss-text {
   display: flex;
