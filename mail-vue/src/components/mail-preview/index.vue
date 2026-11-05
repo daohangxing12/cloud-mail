@@ -3,22 +3,16 @@
     <template v-if="currentEmail.emailId">
       <div class="preview-toolbar">
         <Icon class="icon mobile-back" icon="material-symbols-light:arrow-back-ios-new" width="20" height="20" @click="emit('close')" />
-        <Icon v-perm="'email:delete'" class="icon" icon="uiw:delete" width="16" height="16" @click="handleDelete" />
-        <span class="star" v-if="showStar">
-          <Icon class="icon" @click="changeStar" v-if="currentEmail.isStar" icon="fluent-color:star-16" width="20" height="20" />
-          <Icon class="icon" @click="changeStar" v-else icon="solar:star-line-duotone" width="18" height="18" />
-        </span>
-        <el-button
-            v-if="currentEmail.sendEmail"
-            v-perm="'setting:set'"
-            size="small"
-            type="warning"
-            plain
-            :loading="blockLoading"
-            @click="handleBlockSender"
-        >拉黑发件人</el-button>
+        <button v-if="showReply" v-perm="'email:send'" class="lq-tb" @click="openReply">
+          <Icon icon="lucide:reply" width="16" height="16"/><span>回复</span>
+        </button>
+        <button v-if="showReply" v-perm="'email:send'" class="lq-tb" @click="openForward">
+          <Icon icon="lucide:forward" width="16" height="16"/><span>转发</span>
+        </button>
         <el-dropdown v-if="currentEmail.type !== 1" trigger="click" @command="handleMove">
-          <el-button size="small" plain>移动到</el-button>
+          <button class="lq-tb">
+            <Icon icon="lucide:folder-input" width="16" height="16"/><span>移动到</span><Icon icon="lucide:chevron-down" width="13" height="13"/>
+          </button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item :command="0" :disabled="Number(currentEmail.isSpam || 0) === 0">收件箱</el-dropdown-item>
@@ -27,8 +21,25 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <Icon class="icon" v-if="showReply" v-perm="'email:send'" @click="openReply" icon="la:reply" width="21" height="21" />
-        <Icon class="icon" v-if="showReply" v-perm="'email:send'" @click="openForward" icon="iconoir:arrow-up-right" width="20" height="20" />
+        <button v-perm="'email:delete'" class="lq-tb" @click="handleDelete">
+          <Icon icon="lucide:trash-2" width="16" height="16"/><span>删除</span>
+        </button>
+        <button v-if="showStar" class="lq-tb" :title="currentEmail.isStar ? '取消星标' : '加星标'" @click="changeStar">
+          <Icon v-if="currentEmail.isStar" icon="fluent-color:star-16" width="17" height="17"/>
+          <Icon v-else icon="lucide:star" width="16" height="16"/>
+        </button>
+        <el-dropdown trigger="click" @command="handleMore">
+          <button class="lq-tb" title="更多"><Icon icon="lucide:ellipsis" width="16" height="16"/></button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="copy" :disabled="!currentEmail.sendEmail">复制发件人地址</el-dropdown-item>
+              <el-dropdown-item v-if="hasPerm('setting:set')" command="block" :disabled="!currentEmail.sendEmail || blockLoading">拉黑发件人</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <span class="lq-tb-space"></span>
+        <button class="lq-tb lq-nav" title="上一封" @click="emit('navigate', -1)"><Icon icon="lucide:chevron-up" width="17" height="17"/></button>
+        <button class="lq-tb lq-nav" title="下一封" @click="emit('navigate', 1)"><Icon icon="lucide:chevron-down" width="17" height="17"/></button>
       </div>
       <el-scrollbar class="preview-scrollbar">
         <div class="preview-container">
@@ -121,6 +132,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ShadowHtml from '@/components/shadow-html/index.vue'
+import { hasPerm } from '@/perm/perm.js'
 import SenderAvatar from '@/components/sender-avatar/index.vue'
 import { emailBlockSender, emailDelete, emailMoveFolder, emailRead, emailTranslate } from '@/request/email.js'
 import { allEmailDelete } from '@/request/all-email.js'
@@ -158,7 +170,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'deleted', 'blocked', 'read'])
+const emit = defineEmits(['close', 'deleted', 'blocked', 'read', 'navigate'])
 const { t } = useI18n()
 const uiStore = useUiStore()
 const settingStore = useSettingStore()
@@ -401,6 +413,14 @@ function handleDelete() {
   })
 }
 
+function handleMore(command) {
+  const email = currentEmail.value
+  if (command === 'copy') {
+    navigator.clipboard?.writeText(email.sendEmail).then(() => ElMessage({message: '已复制 ' + email.sendEmail, type: 'success', plain: true}))
+  }
+  if (command === 'block') handleBlockSender()
+}
+
 function handleMove(folder) {
   const email = currentEmail.value
   emailMoveFolder(email.emailId, folder).then(() => {
@@ -456,7 +476,9 @@ function handleBlockSender() {
   padding: 10px 20px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 4px;
+  padding-left: 14px;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--lq-border);
   color: var(--lq-text);
 
@@ -471,6 +493,22 @@ function handleBlockSender() {
     min-width: 20px;
   }
 }
+
+.lq-tb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--lq-text);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover { background: var(--lq-hover); }
+}
+.lq-nav { padding: 0 7px; color: var(--lq-muted); }
+.lq-tb-space { flex: 1; }
 
 .mobile-back {
   display: none;

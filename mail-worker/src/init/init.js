@@ -35,8 +35,18 @@ const dbInit = {
 		await this.v3_4DB(c);
 		await this.v3_5DB(c);
 		await this.v3_6DB(c);
+		await this.v3_7DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	// 侧栏未读数用：只读未读的那几行，不再扫整张邮件表
+	async v3_7DB(c) {
+		try {
+			await c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_email_unread_stats ON email(user_id, type, is_del, unread, is_spam);`).run();
+		} catch (e) {
+			console.warn(`跳过索引：${e.message}`);
+		}
 	},
 
 	async v3_6DB(c) {

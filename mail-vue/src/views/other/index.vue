@@ -40,7 +40,8 @@
           :show-unread="true"
           :show-star="true"
           :show-reply="true"
-          @deleted="clearSelected"
+          @deleted="afterRemove"
+          @navigate="navigate"
           @blocked="clearSelected"
       />
     </section>
@@ -108,6 +109,23 @@ function jumpContent(email) {
     return
   }
   router.push('/message')
+}
+
+// 上一封 / 下一封（step = -1 / 1）
+function navigate(step) {
+  const list = scroll.value?.emailList || []
+  const i = list.findIndex(e => e.emailId === selectedEmail.value?.emailId)
+  const next = i >= 0 ? list[i + step] : null
+  if (next) jumpContent(next)
+}
+
+// 删除或移走后，自动打开下一封（没有下一封就打开上一封）
+function afterRemove(email) {
+  const list = (scroll.value?.emailList || []).filter(e => e.emailId !== email?.emailId)
+  const old = (scroll.value?.emailList || []).findIndex(e => e.emailId === email?.emailId)
+  const next = list[old] || list[old - 1]
+  if (next && isThreePane()) jumpContent(next)
+  else clearSelected()
 }
 
 function clearSelected() {
