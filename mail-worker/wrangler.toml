@@ -14,8 +14,8 @@ custom_domain = true
 
 [[d1_databases]]
 binding = "db"
-database_name = "cloud-mail-db"
-database_id = "4fcbeda4-da5a-4577-9b16-e50fe8dfb78c"
+database_name = "cloud-mail-db-new"
+database_id = "223e601a-ccb6-443c-85de-8f74f85a73dd"
 
 [[kv_namespaces]]
 binding = "kv"
